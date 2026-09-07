@@ -6,6 +6,7 @@ function resetPlayerFor(mode,pos){
   reloadbar.classList.remove('on');
 }
 function goLobby(){
+  if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildLobby(); setMode('lobby');
   resetPlayerFor('lobby',new THREE.Vector3(0,0,6));
   player.yaw=Math.PI; /* face the pods */
@@ -13,19 +14,23 @@ function goLobby(){
   SFX.portal(); syncHUD();
 }
 function goRange(){
+  if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildRange(); setMode('range');
   run.items={}; computeStats(); syncItems();
   resetPlayerFor('range',new THREE.Vector3(0,0,14));
   rangeStats.hits=0; rangeStats.targets=0; rangeStats.dmgLog=[];
   state.boss=null; SFX.portal(); showBanner('Practice range','Fire at will'); syncHUD();
 }
-function goRun(){
-  clearWorld(); buildArena(); setMode('run');
+function goRun(seed){
+  const qs=/[?&]seed=(\d+)/.exec(location.search);
+  state.seed=seed||(qs?parseInt(qs[1]):(Date.now()%1e9));
+  run.order=makeRunOrder(state.seed);
   run.items={}; run.itemsTaken=0; computeStats(); syncItems();
-  resetPlayerFor('run',new THREE.Vector3(0,0,16));
   state.score=0; state.kills=0; state.over=false; state.waveBreak=0; state.t=0; state.wave=0;
-  state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3;
-  SFX.portal(); showBanner(CH().name+' deployed','Wave 1 in 3s'); syncHUD();
+  state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1;
+  if(state.portal){ scene.remove(state.portal); state.portal=null; }
+  setMode('run'); buildStage(1); player.hp=run.stats.maxHp;
+  SFX.portal(); showBanner(CH().name+' deployed','Stage 1 · '+stageMap(1).name); syncHUD();
 }
 function resumePlay(){ state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); last=performance.now(); acc=0; }
 function enterPlay(){ audio(); if(TOUCH){ resumePlay(); return; } canvas.requestPointerLock(); }

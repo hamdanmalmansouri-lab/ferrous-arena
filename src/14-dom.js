@@ -10,3 +10,4 @@ const bossbar=$('bossbar'),bossName=$('bossName'),bossHpEl=$('bossHp'),bossFill=
 const rangeEl=$('range'),rgDps=$('rgDps'),rgHits=$('rgHits'),rgTargets=$('rgTargets');
 const lobbytag=$('lobbytag'),lbChar=$('lbChar'),promptEl=$('prompt'),promptTxt=$('promptTxt');
 const touchEl=$('touch'),zoneL=$('zoneL'),zoneR=$('zoneR'),stickEl=$('stick'),tFire=$('tFire'),tAbil=$('tAbil'),tAbilTxt=$('tAbilTxt'),tJump=$('tJump'),tReload=$('tReload'),tInteract=$('tInteract'),tInteractTxt=$('tInteractTxt'),tPause=$('tPause');
+const fadeEl=$('fade'),compassEl=$('compass'),uiStage=$('uiStage');

@@ -31,7 +31,7 @@ function showMenu(){
   clearWorld(); buildLobby(); avatar.visible=false;
   showScreen(
    '<h1>Ferrous <span>Arena</span></h1>'+
-   '<div class="tag">Roguelite wave shooter &middot; best wave '+state.best+'</div>'+
+   '<div class="tag">Roguelite wave shooter &middot; best wave '+state.best+' &middot; best stage '+state.bestStage+'</div>'+
    controlsHTML()+
    '<button id="goLobby">Enter Lobby</button>'+
    '<div class="btns"><button class="ghost" id="goQuick">Quick deploy as '+CH().name+'</button><button class="ghost" id="goItems">Item codex</button></div>'+
@@ -71,7 +71,8 @@ function showPause(){
   const isRun=state.mode==='run';
   showScreen(
    '<h1>Paused</h1><div class="tag">'+(isRun?'Systems holding':'Practice range')+'</div>'+
-   (isRun?'<div class="stats"><div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
+   (isRun?'<div class="tag" style="margin-top:10px">Stage '+state.stage+' · '+stageMap(state.stage).name+(state.mod?' · '+state.mod.name+' — '+state.mod.desc:'')+' · seed '+state.seed+'</div>'+
+   '<div class="stats"><div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
    '<div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
    '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div></div>'+inventoryHTML():controlsHTML())+
    '<button id="go">Resume</button>'+
@@ -86,14 +87,16 @@ function gameOver(){
   const acc=state.acc.shots?Math.round(state.acc.hits/state.acc.shots*100):0;
   showScreen(
    '<h1>Systems <span style="color:var(--hot)">Down</span></h1>'+
-   '<div class="tag">'+CH().name+' fell on wave '+state.wave+' &middot; best '+state.best+'</div>'+
+   '<div class="tag">'+CH().name+' fell on wave '+state.wave+', stage '+state.stage+' ('+stageMap(state.stage).name+') &middot; best wave '+state.best+' &middot; seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
    '<div><div class="k">Items</div><div class="v">'+run.itemsTaken+'</div></div></div>'+inventoryHTML()+
    '<button id="go">Redeploy as '+CH().name+'</button>'+
-   '<div class="btns"><button id="lob" class="ghost">Return to lobby</button><button id="menu" class="ghost">Main menu</button></div>');
+   '<div class="btns"><button id="same" class="ghost">Replay this seed</button><button id="lob" class="ghost">Return to lobby</button></div>'+
+   '<button id="menu" class="ghost">Main menu</button>');
   hud.classList.remove('on');
   $('go').onclick=()=>{ goRun(); enterPlay(); };
+  $('same').onclick=()=>{ goRun(state.seed); enterPlay(); };
   $('lob').onclick=()=>{ goLobby(); enterPlay(); };
   $('menu').onclick=showMenu;
 }

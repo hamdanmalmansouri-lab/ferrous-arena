@@ -58,6 +58,7 @@ function finalizeWorld(){
     m.castShadow=true; m.receiveShadow=true; world.add(m); colliderMeshes.push(m);
   }
   pendingBlocks={};
+  navBuild();
 }
 function addFloor(half,color,gridColor){
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(half*2,half*2),
@@ -105,30 +106,6 @@ function clearWorld(){
   sparks.forEach(s=>{s.m.visible=false;}); sparks.length=0;
   tracers.forEach(t=>{t.line.visible=false;}); tracers.length=0;
   feed.innerHTML='';
-}
-
-/* ---- map: arena ---- */
-function buildArena(){
-  ARENA=34;
-  addFloor(ARENA,0x141a21,0x39628f);
-  addWalls(ARENA,0x28323f);
-  const COVER=[
-    [0,0,7,2.2,7],[0,0,-7,2.2,7],[13,0,13,2.6,5],[-13,0,13,2.6,5],[13,0,-13,2.6,5],[-13,0,-13,2.6,5],
-    [20,0,0,1.4,10],[-20,0,0,1.4,10],[0,0,20,10,1.4],[0,0,-20,10,1.4],
-    [8,0,24,3.4,4],[-8,0,-24,3.4,4],[24,0,-9,4,3.4],[-24,0,9,4,3.4],
-    [26,0,26,2,2],[-26,0,26,2,2],[26,0,-26,2,2],[-26,0,-26,2,2]
-  ];
-  COVER.forEach((c,i)=>{
-    const w=(i%3===0)?3.2:2.4;
-    addBlock(c[0],c[1],c[2], (c[3]>4?c[3]:w), c[3]>4?2.2:c[3], (c[4]>4?c[4]:w), i%2?0x33404f:0x2c3745);
-  });
-  [[16,0,-22],[-16,0,22],[22,0,16],[-22,0,-16]].forEach(p=>{
-    addBlock(p[0],0,p[2],2.2,4.6,2.2,0x2a3442);
-    const ring=new THREE.Mesh(new THREE.BoxGeometry(2.35,.16,2.35),new THREE.MeshBasicMaterial({color:0x3a86ff}));
-    ring.position.set(p[0],4.2,p[2]); world.add(ring);
-  });
-  scene.fog.color.set(0x070b12); scene.background.set(0x070b12);
-  finalizeWorld();
 }
 
 /* ---- map: lobby ---- */

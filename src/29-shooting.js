@@ -1,6 +1,8 @@
 /* ============================ shooting ============================ */
 function dealDamage(e,dmg,point,head,crit){
+  if(e.shieldT>0){ spark(point,0x6fe3ff,4); SFX.hit(); popHit(false,false); return; }
   e.hp-=dmg; e.hurt=.14;
+  if(e.type==='boss'&&e.mk>=4&&!e.shieldUsed&&e.hp<e.maxHp*0.5){ e.shieldUsed=true; e.shieldT=3.5; say('<b>Warden</b> raises a shield','item'); }
   if(state.mode==='range'){ rangeStats.dmgLog.push({t:state.t,v:dmg}); rangeStats.hits++; }
   if(run.stats.lifesteal>0&&state.mode==='run'){ player.hp=Math.min(run.stats.maxHp,player.hp+dmg*run.stats.lifesteal); }
   spark(point,crit?0xffd166:head?0xffe08a:0xff6a4d,head||crit?11:6);
@@ -65,13 +67,13 @@ function killEnemy(e,head){
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40);
     say('<b>WARDEN DESTROYED</b> +'+pts,'item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
-    state.boss=null;
+    state.boss=null; bossDefeated(e.group.position.clone());
   }else{
     SFX.kill();
     spark(e.group.position.clone().setY(1.1),e.type==='shooter'?0xd07bff:0xff7a4d,16);
     say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>');
     const r=Math.random();
-    if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22)dropPickup(e.group.position,'heal');
+    if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }
   removeEnemy(e);
   syncHUD();

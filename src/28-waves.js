@@ -9,14 +9,15 @@ function startWave(nw){
     const e=makeEnemy('boss',nw);
     let a=Math.random()*Math.PI*2;
     e.group.position.set(Math.cos(a)*(ARENA-6),0,Math.sin(a)*(ARENA-6));
-    e.group.scale.setScalar(.2); e.spawnT=1.2; state.boss=e;
-    bossName.textContent='Warden Mk.'+(nw/BOSS_EVERY);
+    if(nav.ready){ const k=navNearestOpen(e.group.position.x,e.group.position.z); if(k>=0)navCentre(k,e.group.position); }
+    e.group.scale.setScalar(.2); e.spawnT=1.2; state.boss=e; e.mk=state.stage; e.summonT=6; e.burstLeft=0; e.shieldT=0; e.shieldUsed=false;
+    bossName.textContent='Warden Mk.'+state.stage+(state.stage>1?' — '+['','','summons','triple burst','shield phase'][Math.min(4,state.stage)]:'');
   }else{ SFX.wave(); showBanner('Wave '+nw,'Incoming'); }
   if(state.wave>state.best){ state.best=state.wave; save.set('best',state.best); }
   syncHUD();
 }
 function spawnOne(){
-  const shooterChance=state.wave<2?0:Math.min(.15+state.wave*.05,.45);
+  const shooterChance=(state.wave<2?0:Math.min(.15+state.wave*.05,.45))+(state.mods.lancers?0.25:0);
   const type=Math.random()<shooterChance?'shooter':'chaser';
   let x,z,tries=0;
   do{
@@ -24,7 +25,9 @@ function spawnOne(){
     x=Math.cos(a)*r; z=Math.sin(a)*r; tries++;
   }while(tries<25 && (Math.hypot(x-player.pos.x,z-player.pos.z)<14));
   const e=makeEnemy(type,state.wave);
-  e.group.position.set(x,0,z);
+  if(nav.ready){ const k=navNearestOpen(x,z); if(k>=0){ navCentre(k,e.group.position); } else e.group.position.set(x,0,z); }
+  else e.group.position.set(x,0,z);
+  if(e.type==='chaser'&&state.mods.swift)e.speedMul=1.25;
   e.group.scale.setScalar(.2);
   e.spawnT=0.45;
   state.spawnQueue--;
@@ -44,5 +47,41 @@ function waveCleared(){
     if(!blocked&&d>bd){best=p;bd=d;}
   }
   if(best)dropPickup(best,'crate');
-  say('Supply crate dropped <b>1 item</b>','item');
+  say('Supply crate dropped <b>'+(state.mods.bounty?'2 items':'1 item')+'</b>','item');
+}
+
+/* ---- stage flow ---- */
+function bossDefeated(pos){
+  state.portalOpen=true;
+  const g=new THREE.Group();
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(1.7,.16,10,40),basicMat(0x4ea8ff)); ring.position.y=2; g.add(ring);
+  const core=new THREE.Mesh(new THREE.CircleGeometry(1.5,32),new THREE.MeshBasicMaterial({color:0x4ea8ff,transparent:true,opacity:.2,side:THREE.DoubleSide})); core.position.y=2; g.add(core);
+  const gl=glowSprite(0x4ea8ff,7); gl.position.y=2; g.add(gl);
+  const lab=makeLabel('STAGE PORTAL','#4ea8ff',.8); lab.position.y=4.2; g.add(lab);
+  let p=pos.clone(); if(nav.ready){ const k=navNearestOpen(p.x,p.z); if(k>=0)navCentre(k,p); }
+  g.position.set(p.x,p.y,p.z); scene.add(g); state.portal=g;
+  spinners.push({obj:ring,speed:1.2,axis:'y'});
+  interactables.push({pos:p.clone(),r:2.4,label:'Enter stage portal',action:nextStage});
+  showBanner('Warden down','Stage portal open — clear the rest or move on',true);
+}
+function buildStage(stage){
+  clearWorld(); if(state.portal){ scene.remove(state.portal); state.portal=null; }
+  const m=stageMap(stage); state.mapId=m.id; m.build();
+  const mod=stageMod(stage); state.mod=mod; state.mods={}; if(mod)state.mods[mod.id]=true;
+  state.portalOpen=false; state.boss=null; state.spawnQueue=0; state.waveBreak=0;
+  resetPlayerFor('run',m.spawn); player.hp=Math.max(player.hp,run.stats.maxHp*0.6);
+  if(stage>state.bestStage){ state.bestStage=stage; save.set('bestStage',stage); }
+  return m;
+}
+let stageFadeT=0;
+function nextStage(){
+  if(!state.portalOpen||stageFadeT>0)return;
+  SFX.portal(); state.portalOpen=false; stageFadeT=1.0; fadeEl.classList.add('on');
+  setTimeout(()=>{
+    const hpKeep=player.hp; const m=buildStage(state.stage+1); state.stage++; player.hp=Math.max(hpKeep,player.hp);
+    state.startDelay=3.5; state.stageBanner=true;
+    showBanner(m.name,'Stage '+state.stage+' · '+m.sub+(state.mod?' · '+state.mod.name+': '+state.mod.desc:''),true);
+    fadeEl.classList.remove('on'); syncHUD();
+  },500);
+  setTimeout(()=>{ stageFadeT=0; },1100);
 }

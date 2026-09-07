@@ -1,7 +1,8 @@
 # Ferrous Arena
 
 Third-person roguelite wave shooter in a single HTML file (Three.js r128). Three operatives, ten stacking items,
-a Warden boss every five waves, a lobby with a practice range. Plays with keyboard + mouse, touch, or a gamepad.
+a Warden boss every five waves, four stages that change after each boss (with modifiers), a lobby with a practice range.
+Plays with keyboard + mouse, touch, or a gamepad. Runs are seeded — add `?seed=123` to replay one.
 
 - `ferrous-arena.html` — open it, play. No install, no build.
 - `docs/` — the same game packaged as an installable PWA for GitHub Pages (touch controls, offline, home-screen icon).
@@ -35,6 +36,6 @@ Every later `node build.js` + `git push` updates the site; the service worker pi
 ```bash
 npm install three@0.128.0 playwright --no-audit --no-fund   # once
 node build.js
-node test.js && node test2.js && node test3.js               # headless checks (desktop flow, aimed fire, touch)
+node test.js && node test2.js && node test3.js && node test4.js   # headless checks (desktop flow, aimed fire, touch, stages)
 ```
 Press ` in game for the performance overlay. Append `?touch=1` to the URL to force touch controls on a desktop, `?touch=0` to force them off.

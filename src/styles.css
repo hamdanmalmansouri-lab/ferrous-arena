@@ -227,3 +227,15 @@
   button{padding:12px}
 }
 #screen:not(.hide) ~ #touch{display:none}
+
+/* ---------- compass + stage fade ---------- */
+#compass{position:absolute;left:50%;top:78px;width:min(440px,60vw);height:22px;transform:translateX(-50%);pointer-events:none}
+#compass:before{content:'';position:absolute;left:50%;top:0;width:1px;height:8px;background:rgba(255,255,255,.35)}
+#compass i{position:absolute;top:2px;transform:translateX(-50%);font-style:normal;font-size:12px;line-height:1;text-shadow:0 1px 4px rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;gap:1px}
+#compass i b{font:600 9px/1 "Inter",system-ui,sans-serif;color:var(--dim)}
+#compass i.crate,#compass i.item{color:var(--gold)} #compass i.boss{color:var(--hot)} #compass i.portal{color:var(--accent)}
+#hud[data-mode="lobby"] #compass,#hud[data-mode="range"] #compass{display:none}
+#bossbar{top:104px}
+@media (pointer:coarse){ #compass{top:calc(52px + env(safe-area-inset-top));width:min(360px,44vw)} #bossbar{top:calc(78px + env(safe-area-inset-top))} }
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .45s;z-index:6}
+#fade.on{opacity:1}

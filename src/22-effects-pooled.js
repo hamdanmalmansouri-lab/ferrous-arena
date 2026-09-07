@@ -71,5 +71,5 @@ function dropPickup(pos,kind){
     g.add(a,b,glowSprite(0x3ddc84,1.6));
   }
   g.position.set(pos.x,.9,pos.z); scene.add(g);
-  pickups.push({g:g,t:kind==='crate'?9999:40,kind:kind});
+  pickups.push({g:g,t:kind==='crate'?9999:40,kind:kind,items:(kind==='crate'&&state.mods.bounty)?2:1});
 }

@@ -4,7 +4,7 @@ const player={
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
   lastHurt:99, recoil:0, alive:true, abCd:0, abActive:0, iframes:0
 };
-const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null};
+const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
 function CH(){ return CHARS[run.charIdx]; }
 function n(id){ return run.items[id]||0; }

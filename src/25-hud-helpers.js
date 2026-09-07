@@ -17,7 +17,7 @@ function syncItems(){
 }
 function syncHUD(){
   const s=run.stats;
-  uiWave.textContent=state.wave;
+  uiWave.textContent=state.wave; uiStage.textContent=state.stage;
   uiLeft.textContent=enemies.length+state.spawnQueue;
   uiScore.textContent=state.score.toLocaleString();
   uiKills.textContent=state.kills;
@@ -38,7 +38,7 @@ function syncHUD(){
   if(player.abActive>0){ abKey.className='key active'; abFill.style.height='100%'; abState.textContent='Active '+player.abActive.toFixed(1)+'s'; }
   else if(player.abCd>0){ abKey.className='key'; abFill.style.height=((1-player.abCd/(ab.cd*s.cdMult))*100)+'%'; abState.textContent=player.abCd.toFixed(1)+'s'; }
   else { abKey.className='key ready'; abFill.style.height='100%'; abState.textContent='Ready'; }
-  syncTouchHUD();
+  syncTouchHUD(); syncCompass();
   /* boss */
   if(state.boss&&!state.boss.dead){ bossbar.classList.add('on'); const pc=Math.max(0,state.boss.hp/state.boss.maxHp*100); bossFill.style.width=pc+'%'; bossHpEl.textContent=Math.ceil(pc)+'%'; }
   else bossbar.classList.remove('on');
@@ -53,4 +53,17 @@ function setMode(m){
   rangeEl.classList.toggle('on',m==='range');
   lobbytag.classList.toggle('on',m==='lobby');
   promptEl.classList.remove('on');
+}
+
+/* compass strip: relative bearing of crates, items, the boss and an open portal */
+function syncCompass(){
+  if(state.mode!=='run'){ compassEl.innerHTML=''; return; }
+  let html='';
+  const mark=(x,z,cls,glyph)=>{ const ang=Math.atan2(-(x-player.pos.x),-(z-player.pos.z)); let rel=ang-player.yaw; rel=Math.atan2(Math.sin(rel),Math.cos(rel));
+    if(Math.abs(rel)>1.7)return; const pct=50+rel/1.7*50; const d=Math.hypot(x-player.pos.x,z-player.pos.z);
+    html+='<i class="'+cls+'" style="left:'+pct.toFixed(1)+'%">'+glyph+'<b>'+Math.round(d)+'</b></i>'; };
+  for(const p of pickups){ if(p.kind==='crate')mark(p.g.position.x,p.g.position.z,'crate','&#9632;'); else if(p.kind==='item')mark(p.g.position.x,p.g.position.z,'item','&#9670;'); }
+  if(state.boss&&!state.boss.dead)mark(state.boss.group.position.x,state.boss.group.position.z,'boss','&#9650;');
+  if(state.portalOpen&&state.portal)mark(state.portal.position.x,state.portal.position.z,'portal','&#9679;');
+  compassEl.innerHTML=html;
 }

@@ -1,7 +1,7 @@
 # Ferrous Arena — Project Handoff
 
-**Status:** playable v2.2 (roadmap phases 1 + 2a/2b — performance, touch/gamepad input, PWA), verified error-free in
-headless Chromium including touch emulation. Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
+**Status:** playable v2.3 (roadmap phases 1, 2a/2b, 4 — performance, touch/gamepad, PWA, pathfinding + stages), verified error-free in
+headless Chromium including touch emulation and per-map navigation traces. Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
 **Deliverables:** `ferrous-arena.html` (standalone, open and play) and `docs/` (GitHub Pages PWA for phones).
 **Live copy:** published as a private Claude artifact (same URL since v1).
 
@@ -14,7 +14,8 @@ Three.js r128 (global `THREE`, non-module build) from cdnjs; everything else is 
 No assets: procedural geometry, WebAudio-synthesised sound, canvas-generated sky and text labels.
 
 **Flow:** Main menu → Lobby (pick an operative, warm up on the range) → Deploy → waves of robots →
-supply crate with an item after every wave → **Warden boss every 5 waves** (3 items on kill) → death → stats → redeploy.
+supply crate with an item after every wave → **Warden boss every 5 waves** (3 items on kill) → **stage portal** → new map with a
+modifier and a stronger Warden pattern → … → death → stats (seed shown, replayable) → redeploy.
 
 **Controls (desktop):** WASD move, mouse look (pointer lock), LMB hold to fire, **Q / RMB ability**, R reload, **E interact**,
 Shift sprint, Space jump, **1/2/3 swap operative in the lobby**, Esc / Tab menu, ` performance overlay.
@@ -59,11 +60,21 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 - **Dummy** (grey) — practice-range only, wanders, never attacks, respawns 2 s after death.
 - Scaling: `hp = (34 + wave*9) * (1 + wave*0.035)`, speed `+min(wave*0.16, 2)`; boss waves spawn half the normal count.
 
-### Maps (`buildArena / buildLobby / buildRange`)
+### Maps and stages (`19-world`, `19b-maps`)
 `clearWorld()` empties the `world` group and every registry, then a builder repopulates `boxes[]`, `colliderMeshes[]`,
-`interactables[]`, `spinners[]`, `targets[]` and ends with `finalizeWorld()`. `ARENA` (half-extent) is set per map: arena 34, lobby 16, range 22.
-- **Lobby** — three pods along the back wall (walk up + E, or 1/2/3, or Tab roster), green portal → range, blue portal → deploy.
-- **Range** — 7 static + 2 sliding plate targets, 3 dummies, DPS/hits/targets panel (3 s window), yellow portal back. No player damage.
+`interactables[]`, `spinners[]`, `targets[]`, `mapData` and ends with `finalizeWorld()` (geometry merge + **nav grid bake**).
+- **Lobby** — three pods (walk up + E, or 1/2/3, or Tab roster), green portal → range, blue portal → deploy.
+- **Range** — plate targets, 3 dummies, DPS panel, yellow portal back. No player damage.
+- **Run stages** (`MAPS[]`): **Foundry** (warm arena, cover + pillars) · **Relay Station** (two 3 m platforms with stairs, a solid bridge, railings) ·
+  **Frost Array** (36 m open field, pillars, dense fog, ice patches = 2.2 accel) · **Reactor Core** (tiered walkways round a core that fires an
+  expanding shockwave every 20 s — jump it or take 14+wave×0.6). Stage 1 is always Foundry; the rest are shuffled from the run seed.
+- **Stage flow:** Warden death → `bossDefeated()` spawns a portal (interactable) and pauses the wave loop → E → fade → `buildStage(n+1)` →
+  banner with map name + modifier → wave counter continues. Modifiers (`MODS[]`, from stage 2): Lancer Sweep, Swift Rushers, Bounty (2 items
+  per crate), No Repairs, Low Gravity. Warden Mk.N gains a pattern per stage: Mk2 summons Rushers, Mk3 triple burst, Mk4 shield phase at 50%.
+- **Navigation** (`21b-nav`): 1 m grid; per cell a ground height (top of the solid stack under the centre) and an open flag (nothing taller than
+  0.42 m within 0.45 m). Neighbours connect when heights differ ≤ 0.42, so 0.3 m stair steps and platform tops work. A* with a binary heap, ≤ 2500
+  expansions, diagonal corner-cut prevention; per-enemy path cached ~0.5 s, string-pulled up to 12 cells; straight-line steering inside 3 m.
+  Enemies follow `navHeightAt()` so they climb stairs. The grid is 2.5D: nothing can be walked both on and under (hence the solid bridge).
 
 ---
 
@@ -78,7 +89,7 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 | `docs/` | Generated. **GitHub Pages site / PWA**: `index.html` (standalone + manifest link + SW registration + iOS metas), `manifest.webmanifest`, `sw.js` (cache version = bundle hash), icons, `.nojekyll`. |
 | `site/` | Hand-maintained PWA assets copied into `docs/` by the build (manifest, `sw.js` template, PNG icons). |
 | `test-local.html` | Generated. cdnjs script rewritten to `./node_modules/three/build/three.min.js` for headless tests. |
-| `test.js`, `test2.js`, `test3.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation). |
+| `test.js` … `test4.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages). |
 | `README.md` | Player-facing readme + GitHub Pages / install steps. |
 | `ROADMAP.md` | Phased plan; tick items there as they ship. |
 
@@ -98,20 +109,22 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | `16-audio` | `blip`, `noise`, `SFX`, single `master` GainNode |
 | `17-quality-tiers` | `TIERS` (high/medium/low: pixel ratio, shadows, fx density, fog, stars, AA), `detectTier()`, `IS_COARSE`, `Q` |
 | `18-renderer-scene` | renderer, lights, sky; `applyQuality(tier)`, `setQuality('auto'|tier)` |
-| `19-world` | `mergeGeos()` (indexed geometry merge), `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits **one mesh per material**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildArena/buildLobby/buildRange`, `addTarget` |
+| `19-world` | `mergeGeos()`, `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits one mesh per material **and calls `navBuild()`**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildLobby/buildRange`, `addTarget` |
+| `19b-maps` | `mapData`, `buildFoundry/buildRelay/buildFrost/buildReactor`, `MAPS[]`, `MODS[]`, `mulberry32`, `makeRunOrder(seed)`, `stageMap()`, `stageMod()` |
 | `20-player` | `player`, `run`, `computeStats()`, `buildAvatarModel(ch)`, `rebuildAvatar()` |
-| `21-enemies` | `MAT_HIDDEN`, `basicMat()` cache, shared limb geometries, `enemyGeo(type)` merged torso/metal parts, `makeEnemy`, `removeEnemy`, `spawnDummy` |
+| `21-enemies` | `MAT_HIDDEN`, `basicMat()` cache, shared limb geometries, `enemyGeo(type)`, `makeEnemy` (adds `speedMul`, path fields), `removeEnemy`, `spawnDummy` |
+| `21b-nav` | `navBuild`, `navCell/navHeightAt/navOpenAt/navCentre/navNearestOpen`, `navPath` (A*), `navClear` (Bresenham), `navSteer(e,target,out,dt)` |
 | `22-effects` | **pools**: `TRACER_POOL` (48, geometry rewritten in place), `SPARK_POOL` (240, fade by scale, count × `Q.cfg.fx`), `PROJ_POOL` (160, no lights — `glowSprite()`), `dropPickup` |
 | `23-state` | `state` (`mode` ∈ menu/lobby/range/run), `rangeStats`, `keys` |
 | `23b-input-state` | `TOUCH` detection (`?touch=1/0` override), `inp` (merged per-step input), `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
 | `24-math-helpers` | scratch vectors (`_v1.._v3`, `_fwd`, `_camF`…), `forwardInto(out,…)`, `resolveXZ`, `supportHeight`, `lineOfSight` |
-| `25-hud-helpers` | `syncHUD` (ability, boss bar, touch button), `syncItems`, `syncRange`, `setMode` (drives `#hud[data-mode]`) |
+| `25-hud-helpers` | `syncHUD` (ability, boss bar, touch button, stage), `syncCompass` (crates/items/boss/portal bearings), `syncItems`, `syncRange`, `setMode` |
 | `26-items`, `27-characters` | `giveItem(id)`, `selectChar(i, inLobby)` |
-| `28-waves` | `startWave` (boss on multiples of `BOSS_EVERY`), `spawnOne`, `waveCleared` (crate) |
+| `28-waves` | `startWave` (boss on multiples of `BOSS_EVERY`, `e.mk = stage`), `spawnOne` (nav-snapped, Lancer share + swift mod), `waveCleared` (crate, bounty), **`bossDefeated`, `buildStage`, `nextStage`** |
 | `29-shooting` | `tryFire` (pellet loop, crit, range targets), `dealDamage`, `killEnemy`, `startReload` |
 | `30-abilities`, `31-damage` | `useAbility` (Blink uses `inp`), `hurtPlayer` (shield, i-frames, haptic) |
-| `32-loop` | `update(dt)` at a **fixed 60 Hz step** from `frame()` (accumulator, max 8 steps, backlog dropped after a hidden tab); order: input → timers → movement → regen → avatar → camera → spinners/targets → interactables → enemies → waves → projectiles → pickups → fx; `perf` sampling, 3 s auto-tier probe, `drawDebug()` / `toggleDebug()` |
-| `33-mode-transitions` | `resetPlayerFor`, `goLobby/goRange/goRun`, `resumePlay()` (touch path — no pointer lock), `enterPlay()` |
+| `32-loop` | `update(dt)` at a **fixed 60 Hz step**; order: input → timers → movement (ice, low-grav) → regen → avatar → camera → spinners/targets → interactables (run: portal) → enemies (`approach()` = straight inside 3 m else `navSteer`; ground-following; boss patterns by `mk`) → waves (paused while the portal is open) → reactor pulse → projectiles → pickups → fx; `perf`, auto-tier probe, debug overlay |
+| `33-mode-transitions` | `resetPlayerFor`, `goLobby/goRange`, `goRun(seed?)` (seed from arg / `?seed=` / clock → `run.order`, `buildStage(1)`), `resumePlay()`, `enterPlay()` |
 | `34-input` | keyboard/mouse/pointer-lock; unlocking pauses (run/range) or opens the roster (lobby) |
 | `34b-touch` | pointer-event joystick (floating, 50 px radius), look-drag, held buttons with pointer capture, `syncTouchHUD()`; iOS scroll/zoom suppression |
 | `35-screens`, `36-boot` | `showMenu` (quality + touch toggles), `showCodex`, `showLobbyPanel`, `showPause`, `gameOver`; `window.__ARENA__` |
@@ -136,7 +149,8 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 - Operative feel: `CHARS[i].base` and `.ability`. Item strength: the multipliers inside `computeStats()`.
 - Drop rates: `killEnemy` (`r<0.06` item, `r<0.22` heal). Crate distance: `waveCleared`.
 - Difficulty: `makeEnemy` hp/speed lines, `startWave` counts, `spawnOne` shooter share, boss timers in the boss branch of `update`.
-- Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`. Alive cap 16 in the spawn block.
+- Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`, 3.5 after a portal. Alive cap 16 in the spawn block (summons up to 20).
+- Nav: `NAV_STEP`, `NAV_RADIUS`, repath interval in `navSteer`, `maxExpand` 2500. Stage: `MODS[]` effects in `spawnOne`/`killEnemy`/`dropPickup`/movement; boss patterns in the boss branch; reactor `period` in `buildReactor`.
 - Touch: `touch.sens` (look), `STICK_R`, aim-assist cone `bestAng=0.07` and pull `7 / 3` in `aimAssist`. Gamepad curve in `pollGamepad`.
 - Quality: `TIERS` table; probe thresholds in `frame()`.
 - Camera/FOV: `dist=5.15`, offset `0.72`, FOV 66.
@@ -153,6 +167,7 @@ node build.js
 node test.js    # menu, lobby E/1-2-3 select, range portal, blink, run, all 10 items, wave 5 boss, boss loot, draw-call count, death
 node test2.js   # aimed fire on the range, chaser damage, barrier, wave clear -> crate -> pickup -> next wave
 node test3.js   # touch: layer on, lobby without pointer lock, joystick moves, look-drag, FIRE/ability/pause buttons, aim assist drift
+node test4.js   # stages: nav grid per map, 3 Rushers close on the player on every map (incl. Relay platform top), portal -> next stage, Mk2 summons, reactor pulse
 ```
 
 Launch flags: `--use-gl=swiftshader --enable-unsafe-swiftshader --no-sandbox`. Simulation is fixed-step, so results are
@@ -162,11 +177,13 @@ is active and `caches.keys()` lists `ferrous-<hash>` (three.js itself won't load
 
 `window.__ARENA__` exposes `{state, player, run, enemies, keys, camera, CHARS, ITEMS, computeStats, selectChar, giveItem,
 useAbility, goLobby, goRange, goRun, startWave, pickups, targets, interactables, perf, Q, setQuality, renderer, toggleDebug,
-inp, touch, pad, TOUCH, forceStart(mode)}`. `forceStart('lobby'|'range'|'run')` bypasses pointer lock.
+inp, touch, pad, TOUCH, nav, MAPS, buildStage, nextStage, mapData, stageMap, navPath, navNearestOpen, bossDefeated, forceStart(mode)}`.
+`forceStart('lobby'|'range'|'run')` bypasses pointer lock. `buildStage(n)` swaps the map without touching `state.stage`.
 
 Acceptance bar: `ERRORS: none` in all three, range `hits > 0`, player HP drops on chaser contact, a crate appears after a wave clear,
 `state.boss` is set on wave 5 and `pickups` gains 3 items when it dies, `perf` reports ≤ 140 draw calls at the alive cap,
-touch joystick moves the player and aim assist drifts yaw toward an off-centre target.
+touch joystick moves the player and aim assist drifts yaw toward an off-centre target, and in `test4.js` every map's enemy
+distances fall over ~10 s with at least one enemy reaching `y=3` on Relay.
 
 Measured: ~105–135 draw calls / ~3.5k triangles with 16 enemies (v2 was ~330 calls). Desktop: 120 fps at High on an RTX 5090.
 
@@ -176,9 +193,9 @@ Measured: ~105–135 draw calls / ~3.5k triangles with 16 enemies (v2 was ~330 c
 
 Roughly in value order (details in `ROADMAP.md`):
 
-1. **No enemy pathfinding** — chasers and the Warden press against cover. Roadmap phase 4 (nav grid + A*).
-2. **Only one arena layout** — phase 4 adds stage progression after each boss.
-3. **Procedural box models / sine-wave animation** — phases 3 and 5.
+1. **Procedural box models / sine-wave animation** — phases 3 and 5.
+2. **Nav is 2.5D** — no overhangs/bridges you can walk under; enemies occasionally jostle each other off a stair for a moment (separation force).
+3. **Stage count is unbounded but only 4 maps** — stage 5 wraps to the shuffled order; more builders slot straight into `MAPS[]`.
 4. **Store wrappers not started** (2c): Capacitor project, Play/TestFlight builds — needs developer accounts and a Mac for iOS.
 5. **Phone verification pending** — touch was verified with Chromium touch emulation; a real Android/iOS pass is the phase 2 acceptance.
 6. **Alive cap still 16** — batching leaves headroom; profile on a phone before raising it.
@@ -193,3 +210,4 @@ Roughly in value order (details in `ROADMAP.md`):
 - Keep `arena.body.html` free of doctype/html/head/body tags — the Artifact tool supplies the skeleton.
 - No dynamic lights on transient objects (§4). Add lights only in map builders.
 - Loop code reads `inp`, never `keys`/`touch`/`pad` directly.
+- Every map builder must end with `finalizeWorld()` (it bakes the nav grid) and must not leave anything the enemies need to walk under.

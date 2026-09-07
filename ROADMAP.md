@@ -42,7 +42,7 @@ Legend: `[x]` shipped · `[ ]` open · **AC** acceptance criteria
 - [x] Source split into `src/*.js` + `build.js` → single-file bundle unchanged for shipping
 - Result: ~105 draw calls / 3.7k tris with 16 enemies (was ~330 calls)
 
-### v2.2 — Phase 2a/2b: touch, gamepad, PWA (current)
+### v2.2 — Phase 2a/2b: touch, gamepad, PWA
 - [x] Input abstraction: `inp` merged per step from keyboard, touch and gamepad; loop/abilities/shooting read only `inp`
 - [x] Touch controls: floating left joystick (push far = sprint), right-half look-drag, FIRE (hold) / ability (with cooldown ring) / JUMP / reload / interact pill / pause; pointer capture, iOS scroll+zoom suppression
 - [x] Aim assist (soft magnetism within ~4° of the crosshair, stronger while firing) and optional auto-fire — touch only, toggles on the menu, persisted
@@ -52,7 +52,17 @@ Legend: `[x]` shipped · `[ ]` open · **AC** acceptance criteria
 - [x] PWA: `docs/` site built by `build.js` — manifest (fullscreen, landscape, maskable icon), service worker precache with per-build version, iOS home-screen metas
 - [x] `test3.js` touch-emulation harness; README with GitHub Pages + install steps
 
-Known gaps carried forward: no enemy pathfinding, single arena layout, procedural box models, keyframe-free animation.
+### v2.3 — Phase 4: pathfinding, stages, four maps (current)
+- [x] Nav grid baked per map (1 m cells, ground height + open flag, 2.5D), A* with binary heap and corner-cut prevention, per-enemy path cache with string-pulling, straight-line steering inside 3 m; enemies follow ground height (stairs, platforms)
+- [x] Stage flow: Warden death opens a portal (interactable, compass marker), wave loop pauses, E → fade → next map; wave counter continues; 60% HP floor on arrival
+- [x] Map registry with seeded order (`?seed=`, shown on pause/death, "Replay this seed" button); best stage persisted
+- [x] Four maps: Foundry, Relay Station (platforms + stairs + bridge), Frost Array (ice patches, dense fog), Reactor Core (tiers + telegraphed shockwave)
+- [x] Five stage modifiers (Lancer Sweep, Swift Rushers, Bounty, No Repairs, Low Gravity), one per stage from stage 2
+- [x] Warden variants: Mk2 summons Rushers, Mk3 triple burst, Mk4 shield phase at 50% HP
+- [x] Compass strip (crates, items, boss, portal with distances); Stage counter in the top bar
+- [x] `test4.js`: nav trace on every map, portal transition, Mk2 summon, reactor pulse
+
+Known gaps carried forward: procedural box models, keyframe-free animation, no store wrappers, phone verification pending.
 
 ---
 
@@ -122,19 +132,19 @@ Known gaps carried forward: no enemy pathfinding, single arena layout, procedura
 
 **Goal:** Risk-of-Rain style stage progression — beat the Warden, take the portal, arrive somewhere new.
 
-- [ ] **Stage flow.** After a Warden dies a golden portal spawns; the wave loop pauses (no next wave); walking through it → stage transition screen (stage name, theme, modifier) → new map, wave counter continues, difficulty +1 tier. Optional: 20-second loot window before the portal opens.
-- [ ] **Map registry.** `MAPS = [{id, name, build(), theme:{fog, sky, floor, grid, light}, spawnRing, playerSpawn, modifiers}]`; stage N picks `MAPS[N % MAPS.length]` with a shuffled order per run (seeded RNG so a run can be replayed).
-- [ ] **Four launch maps** (all reuse `addBlock` + merged geometry; each ≤ 150 lines):
+- [x] **Stage flow.** After a Warden dies a golden portal spawns; the wave loop pauses (no next wave); walking through it → stage transition screen (stage name, theme, modifier) → new map, wave counter continues, difficulty +1 tier. Optional: 20-second loot window before the portal opens.
+- [x] **Map registry.** `MAPS = [{id, name, build(), theme:{fog, sky, floor, grid, light}, spawnRing, playerSpawn, modifiers}]`; stage N picks `MAPS[N % MAPS.length]` with a shuffled order per run (seeded RNG so a run can be replayed).
+- [x] **Four launch maps** (all reuse `addBlock` + merged geometry; each ≤ 150 lines):
   1. **Foundry** — the current arena, retuned (warm orange lights, steam vents that block LOS).
   2. **Relay Station** — two elevated platforms with ramps (uses `supportHeight`), catwalk over a central pit that damages on fall.
   3. **Frost Array** — open ground with sparse pillars, low fog, ice patches (reduced friction), long sightlines that favour the Ranger.
   4. **Reactor Core** — circular tiered rings around a glowing core; the core pulses an expanding shockwave every 20 s that must be jumped (telegraphed).
-- [ ] **Stage modifiers** (one per stage, shown on the transition screen): more Lancers, faster Rushers, double crates, no repair kits, low gravity.
-- [ ] **Boss variants per stage:** Warden Mk.N gets one extra pattern per stage (laser sweep, summon 4 Rushers, shield phase that only the weak-point breaks).
-- [ ] **Enemy navigation** (the long-standing gap): coarse nav grid (1 m cells) baked at map build from `boxes[]`, A* with path caching per enemy, string-pulling for straight runs; fall back to steering when within 3 m. Required for the two multi-level maps.
-- [ ] **Minimap / compass strip** showing crate and portal direction — bigger maps need it.
+- [x] **Stage modifiers** (one per stage, shown on the transition screen): more Lancers, faster Rushers, double crates, no repair kits, low gravity.
+- [x] **Boss variants per stage:** Warden Mk.N gets one extra pattern per stage (laser sweep, summon 4 Rushers, shield phase that only the weak-point breaks).
+- [x] **Enemy navigation** (the long-standing gap): coarse nav grid (1 m cells) baked at map build from `boxes[]`, A* with path caching per enemy, string-pulling for straight runs; fall back to steering when within 3 m. Required for the two multi-level maps.
+- [x] **Minimap / compass strip** showing crate and portal direction — bigger maps need it.
 
-**AC:** a run visits ≥ 3 distinct maps in one session; portal only appears after a boss; enemies reach the player on Relay Station's upper platform without getting stuck (headless trace: average distance-to-player decreasing over 20 s on every map); seeded run replays the same map order.
+**AC:** a run visits ≥ 3 distinct maps in one session ✅; portal only appears after a boss ✅; enemies reach the player on Relay Station's upper platform without getting stuck ✅ (headless trace: two of three Rushers at 1.3 m on the platform within ~10 s; distances fall on every map); seeded run replays the same map order ✅ (`makeRunOrder` is pure in the seed). Deviation from plan: the Relay pit and the Foundry steam vents were dropped; the catwalk became a solid bridge because the nav grid is 2.5D.
 
 ---
 
@@ -172,10 +182,10 @@ Known gaps carried forward: no enemy pathfinding, single arena layout, procedura
 |---|---|---|---|
 | 1 | Performance & architecture ✅ | M | — |
 | 2a/2b | Touch + PWA ✅ | M | 1 |
-| 4 (nav + stage flow + 2 maps) | Maps, part 1 | M | 1 |
+| 4 (nav + stage flow + 4 maps) | Maps ✅ | M | 1 |
 | 3 | Models | L | 1 (budget), loading screen |
 | 5 | Animations | L | 3 |
-| 4 (remaining maps, boss variants) | Maps, part 2 | M | 3, 5 |
+| 4 (more maps, per-map boss arenas) | Maps, part 2 | M | 3, 5 |
 | 2c | Store builds | S–M | 2a, 2b, 3 |
 | 6 | Extras | ongoing | — |
 
