@@ -7,7 +7,7 @@ const path = require('path');
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
   await page.goto('file://' + path.resolve('test-local.html'));
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
   await page.evaluate(() => { __ARENA__.selectChar(0); __ARENA__.forceStart('range'); });
   await page.waitForTimeout(400);
   // put the camera line (x = player.x + 0.72) through the centre plate at (0,-14)

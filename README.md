@@ -24,6 +24,11 @@ Plays with keyboard + mouse, touch, or a gamepad. Runs are seeded — add `?seed
 3. On GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main`, Folder: `/docs` → Save.**
 4. After a minute the game is live at `https://<you>.github.io/ferrous-arena/`.
 
+Live site: **https://hamdanmalmansouri-lab.github.io/ferrous-arena/**
+
+To ship an update: `node build.js`, then `git add . && git commit -m "v2.x" && git push`. The service worker version is the bundle hash, so
+phones pick up the new build on their next launch (force it with a page reload).
+
 ## Install on a phone
 
 - **Android (Chrome):** open the URL → ⋮ menu → **Add to Home screen** / **Install app**. It launches fullscreen in landscape and works offline.

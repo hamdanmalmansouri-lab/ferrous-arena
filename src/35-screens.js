@@ -35,14 +35,39 @@ function showMenu(){
    controlsHTML()+
    '<button id="goLobby">Enter Lobby</button>'+
    '<div class="btns"><button class="ghost" id="goQuick">Quick deploy as '+CH().name+'</button><button class="ghost" id="goItems">Item codex</button></div>'+
-   (TOUCH?'<div class="seg"><span>Touch</span><button data-t="assist" class="'+(touch.assist?'on':'')+'">Aim assist</button><button data-t="auto" class="'+(touch.autoFire?'on':'')+'">Auto-fire</button></div>':'')+
-   '<div class="seg"><span>Quality</span>'+['auto','high','medium','low'].map(q=>'<button data-q="'+q+'" class="'+((Q.auto?'auto':Q.tier)===q?'on':'')+'">'+q[0].toUpperCase()+q.slice(1)+(q==='auto'?' ('+Q.tier+')':'')+'</button>').join('')+'</div>'+
-   '<p class="note">Pick an operative in the lobby, warm up on the range, then deploy. A Warden boss arrives every '+BOSS_EVERY+' waves. <kbd>`</kbd> toggles the performance overlay.</p>');
+   '<button class="ghost" id="goSettings">Settings</button>'+
+   '<p class="note">Pick an operative in the lobby, warm up on the range, then deploy. A Warden boss arrives every '+BOSS_EVERY+' waves. Quality: '+(Q.auto?'auto ('+Q.tier+')':Q.tier)+'.</p>');
   $('goLobby').onclick=()=>{ goLobby(); enterPlay(); };
   $('goQuick').onclick=()=>{ goRun(); enterPlay(); };
   $('goItems').onclick=showCodex;
-  card.querySelectorAll('.seg button[data-q]').forEach(b=>{ b.onclick=()=>{ setQuality(b.dataset.q); SFX.ui(); showMenu(); }; });
-  card.querySelectorAll('.seg button[data-t]').forEach(b=>{ b.onclick=()=>{ if(b.dataset.t==='assist'){touch.assist=!touch.assist; save.set('aimassist',touch.assist);} else {touch.autoFire=!touch.autoFire; save.set('autofire',touch.autoFire);} SFX.ui(); showMenu(); }; });
+  $('goSettings').onclick=()=>showSettings(showMenu);
+}
+function showSettings(back){
+  const row=(id,label,val,min,max,step,fmt)=>'<div class="set"><span>'+label+'</span><input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'"><b id="'+id+'V">'+fmt(val)+'</b></div>';
+  const pct=v=>Math.round(v*100)+'%', mult=v=>(+v).toFixed(2)+'×';
+  showScreen('<h1>Settings</h1><div class="tag">Saved on this device</div>'+
+    '<div class="seg"><span>Quality</span>'+['auto','high','medium','low'].map(q=>'<button data-q="'+q+'" class="'+((Q.auto?'auto':Q.tier)===q?'on':'')+'">'+q[0].toUpperCase()+q.slice(1)+(q==='auto'?' ('+Q.tier+')':'')+'</button>').join('')+'</div>'+
+    '<div class="sets">'+
+    row('sTouch','Touch look sensitivity',SETTINGS.touchSens,0.4,3,0.05,mult)+
+    row('sMouse','Mouse sensitivity',SETTINGS.mouseSens,0.3,3,0.05,mult)+
+    row('sPad','Controller sensitivity',SETTINGS.padSens,0.3,3,0.05,mult)+
+    row('sVol','Volume',SETTINGS.volume,0,1,0.05,pct)+
+    '</div>'+
+    '<div class="seg"><span>Toggles</span><button data-t="invert" class="'+(SETTINGS.invertY?'on':'')+'">Invert Y</button>'+
+    (TOUCH?'<button data-t="assist" class="'+(touch.assist?'on':'')+'">Aim assist</button><button data-t="auto" class="'+(touch.autoFire?'on':'')+'">Auto-fire</button>':'')+
+    '<button data-t="overlay" class="'+(dbgOn?'on':'')+'">FPS overlay</button></div>'+
+    '<button id="back">Back</button>');
+  card.querySelectorAll('.seg button[data-q]').forEach(b=>{ b.onclick=()=>{ setQuality(b.dataset.q); SFX.ui(); showSettings(back); }; });
+  const bind=(id,key,fmt)=>{ const el=$(id); el.oninput=()=>{ SETTINGS[key]=parseFloat(el.value); $(id+'V').textContent=fmt(el.value); save.set(key,SETTINGS[key]); applySettings(); }; };
+  bind('sTouch','touchSens',mult); bind('sMouse','mouseSens',mult); bind('sPad','padSens',mult); bind('sVol','volume',pct);
+  $('sVol').onchange=()=>{ SFX.ui(); };
+  card.querySelectorAll('.seg button[data-t]').forEach(b=>{ b.onclick=()=>{ const k=b.dataset.t;
+    if(k==='invert'){ SETTINGS.invertY=!SETTINGS.invertY; save.set('invertY',SETTINGS.invertY); }
+    else if(k==='assist'){ touch.assist=!touch.assist; save.set('aimassist',touch.assist); }
+    else if(k==='auto'){ touch.autoFire=!touch.autoFire; save.set('autofire',touch.autoFire); }
+    else if(k==='overlay'){ toggleDebug(); }
+    SFX.ui(); showSettings(back); }; });
+  $('back').onclick=back;
 }
 function showCodex(){
   showScreen('<h1>Item <span>Codex</span></h1><div class="tag">All items stack &middot; dropped by crates, enemies and Wardens</div>'+
@@ -76,8 +101,9 @@ function showPause(){
    '<div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
    '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div></div>'+inventoryHTML():controlsHTML())+
    '<button id="go">Resume</button>'+
-   '<div class="btns"><button id="lob" class="ghost">'+(isRun?'Abandon run &middot; lobby':'Return to lobby')+'</button><button id="menu" class="ghost">Main menu</button></div>');
-  $('go').onclick=enterPlay;
+   '<div class="btns"><button id="lob" class="ghost">'+(isRun?'Abandon run &middot; lobby':'Return to lobby')+'</button><button id="menu" class="ghost">Main menu</button></div>'+
+   '<button id="settings" class="ghost">Settings</button>');
+  $('go').onclick=enterPlay; $('settings').onclick=()=>showSettings(showPause);
   $('lob').onclick=()=>{ goLobby(); enterPlay(); };
   $('menu').onclick=showMenu;
 }

@@ -59,7 +59,7 @@ function killEnemy(e,head){
   e.dead=true;
   if(e.type==='dummy'){
     spark(e.group.position.clone().setY(1.1),0x9fb4cc,12); SFX.kill();
-    removeEnemy(e); setTimeout(()=>{ if(state.mode==='range')spawnDummy(); },2000); return;
+    removeEnemy(e,true); setTimeout(()=>{ if(state.mode==='range')spawnDummy(); },2000); return;
   }
   const pts=(e.type==='boss'?1500:e.type==='shooter'?170:110)*(head?2:1);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
@@ -75,7 +75,7 @@ function killEnemy(e,head){
     const r=Math.random();
     if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }
-  removeEnemy(e);
+  removeEnemy(e,true);
   syncHUD();
 }
 function startReload(){

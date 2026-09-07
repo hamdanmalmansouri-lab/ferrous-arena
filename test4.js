@@ -7,7 +7,7 @@ const path = require('path');
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
   await page.goto('file://' + path.resolve('test-local.html'));
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
   await page.evaluate(() => { __ARENA__.selectChar(0); __ARENA__.forceStart('run'); });
   await page.waitForTimeout(300);
   let r = await page.evaluate(() => ({ map: __ARENA__.state.mapId, order: __ARENA__.run.order, nav: { w: __ARENA__.nav.w, open: Array.from(__ARENA__.nav.open).filter(v => v).length, ready: __ARENA__.nav.ready } }));

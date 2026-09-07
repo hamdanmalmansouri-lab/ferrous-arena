@@ -8,7 +8,7 @@ const path = require('path');
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
   await page.goto('file://' + path.resolve('test-local.html') + '?touch=1');
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
   let r = await page.evaluate(() => ({ touch: __ARENA__.TOUCH, layerOn: document.getElementById('touch').classList.contains('on'), tier: __ARENA__.Q.tier, menuHasTouchRow: !!document.querySelector('.seg button[data-t]') }));
   console.log('touch boot:', JSON.stringify(r));
   await page.screenshot({ path: 'shot-touch-menu.png' });

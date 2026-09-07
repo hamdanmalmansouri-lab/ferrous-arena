@@ -51,9 +51,19 @@ function update(dt){
   /* ---- avatar ---- */
   avatar.position.copy(player.pos);
   avatar.rotation.y=player.yaw;
-  const bobAmt=moving?Math.sin(state.t*(inp.sprint?16:11))*0.055:0;
-  avatar.position.y+=bobAmt*(player.grounded?1:0);
-  gun.rotation.x=-player.pitch*0.55;
+  if(avatarAnim){
+    avatarAnim.update(dt);
+    const firing=inp.fire||player.fireCd>0.02||(inp._auto&&touch.autoFire);
+    const st=!player.grounded?(player.vel.y>0?'jump':'fall'):firing?'holding-right-shoot':moving?((inp.sprint&&inp.f>0.5)?'sprint':'walk'):'holding-right';
+    avatarAnim.play(st,0.12,false,st==='walk'?Math.max(.6,s.speed/5):st==='sprint'?Math.max(.8,s.sprint/8):1);
+    if(avatarBones&&avatarBones.torso)avatarBones.torso.rotation.x-=player.pitch*0.45;
+  }else{
+    const bobAmt=moving?Math.sin(state.t*(inp.sprint?16:11))*0.055:0;
+    avatar.position.y+=bobAmt*(player.grounded?1:0);
+    gun.rotation.x=-player.pitch*0.55;
+  }
+  for(let i=corpses.length-1;i>=0;i--){ const c=corpses[i]; c.an.update(dt); c.t-=dt; if(c.t<0.35)c.g.position.y-=dt*2.5; if(c.t<=0){ scene.remove(c.g); corpses.splice(i,1); } }
+  for(const a of podAnims)a.update(dt);
   flash.intensity*=Math.pow(0.0006,dt);
   flashMesh.material.opacity*=Math.pow(0.0002,dt);
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
@@ -136,9 +146,19 @@ function update(dt){
     if(nav.ready){ const gh=navHeightAt(g.position.x,g.position.z); const d=gh-g.position.y;
       g.position.y+= (d>0?Math.min(d,8*dt):Math.max(d,-14*dt)); }
 
-    e.bob+=dt*(mv.lengthSq()>0.2?9:2);
-    e.ref.legs.forEach(l=>{ l.rotation.x=Math.sin(e.bob+(l.userData.leg>0?0:Math.PI))*0.55; });
-    e.ref.arms.forEach(a=>{ a.rotation.x=e.type==='shooter'?-1.2:Math.sin(e.bob+(a.userData.arm>0?Math.PI:0))*0.4-0.15; });
+    if(e.animator){
+      e.animator.update(dt); if(e.attackT>0)e.attackT-=dt; if(e.shootT>0)e.shootT-=dt;
+      const mvn=mv.lengthSq()>0.2; let st, ts=1;
+      if(e.attackT>0)st='attack-melee-right';
+      else if(e.type==='shooter'){ st=e.shootT>0?'holding-right-shoot':mvn?'walk':'holding-right'; ts=mvn?Math.max(.6,e.speed/5):1; }
+      else if(e.type==='dummy'){ st=mvn?'walk':'idle'; ts=.6; }
+      else { st=mvn?(e.type==='boss'&&e.charge<=0?'walk':'sprint'):'idle'; ts=mvn?(st==='walk'?Math.max(.6,e.speed/5):Math.max(.8,e.speed*e.speedMul/8)):1; }
+      e.animator.play(st,0.12,st==='attack-melee-right',ts);
+    }else{
+      e.bob+=dt*(mv.lengthSq()>0.2?9:2);
+      e.ref.legs.forEach(l=>{ l.rotation.x=Math.sin(e.bob+(l.userData.leg>0?0:Math.PI))*0.55; });
+      e.ref.arms.forEach(a=>{ a.rotation.x=e.type==='shooter'?-1.2:Math.sin(e.bob+(a.userData.arm>0?Math.PI:0))*0.4-0.15; });
+    }
 
     if(e.hurt>0){ e.hurt-=dt; g.scale.setScalar((e.spawnT>0?g.scale.x:e.size)*(1+e.hurt*0.5)); }
     else if(e.spawnT<=0)g.scale.setScalar(e.size);
@@ -147,11 +167,11 @@ function update(dt){
     if(mode!=='run')continue;
     e.cd-=dt;
     if(e.type==='chaser'){
-      if(distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; hurtPlayer(9+state.wave*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
+      if(distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+state.wave*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
     }else if(e.type==='shooter'){
       const muzzle=g.position.clone(); muzzle.y+=1.35;
       if(distP<26&&e.cd<=0&&lineOfSight(muzzle,player.pos.clone().add(new THREE.Vector3(0,1.2,0)))){
-        e.cd=1.7+Math.random()*0.7;
+        e.cd=1.7+Math.random()*0.7; e.shootT=0.5;
         const aim=player.pos.clone().add(new THREE.Vector3(0,1.15,0)).sub(muzzle).normalize();
         aim.x+=(Math.random()-.5)*0.07; aim.y+=(Math.random()-.5)*0.05;
         shootProjectile(muzzle,aim.normalize(),24,8+state.wave*0.4,0xff86f0,false);
@@ -159,7 +179,7 @@ function update(dt){
       }
     }else if(e.type==='boss'&&e.spawnT<=0){
       if(e.shieldT>0){ e.shieldT-=dt; g.scale.setScalar(e.size*(1+Math.sin(state.t*20)*0.04)); if(e.shieldT<=0)say('Shield down'); }
-      if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; hurtPlayer(22+state.wave*0.8); }
+      if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; e.attackT=0.6; hurtPlayer(22+state.wave*0.8); }
       const burst=()=>{ const m=g.position.clone(); m.y+=1.6; const cnt=12;
         for(let k=0;k<cnt;k++){ const a=k/cnt*Math.PI*2+state.t; shootProjectile(m,new THREE.Vector3(Math.cos(a),-0.05,Math.sin(a)),13,12+state.wave*0.6,0xffb347,true); }
         blip({type:'square',f0:400,f1:160,d:.3,v:.16}); };
@@ -267,7 +287,7 @@ function frame(now){
     if(steps===8)acc=0;                  // tab was hidden: drop the backlog instead of spiralling
   }else if(state.mode==='menu'){ /* idle orbit for the menu backdrop */
     const t=now/1000; camera.position.set(Math.sin(t*.12)*14,5+Math.sin(t*.3)*.6,Math.cos(t*.12)*14);
-    camera.lookAt(0,1.5,-4); spinners.forEach(sp=>{ sp.obj.rotation.y+=sp.speed*dt; });
+    camera.lookAt(0,1.5,-4); spinners.forEach(sp=>{ sp.obj.rotation.y+=sp.speed*dt; }); for(const a of podAnims)a.update(dt);
   }
   renderer.render(scene,camera);
   /* perf sampling + auto-tier probe */

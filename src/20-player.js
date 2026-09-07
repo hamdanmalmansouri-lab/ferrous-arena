@@ -31,7 +31,30 @@ computeStats();
 /* avatar: rebuilt on character select */
 const avatar=new THREE.Group(); scene.add(avatar);
 let gun=null, flash=null, flashMesh=null;
+/* glTF character + weapon; falls back to the procedural box model when models are unavailable */
+const GUN_MOUNT={pos:[-0.2,0.0,0.0],rot:[0,Math.PI/2,0],scale:1.0};   // arm-right bone space (raw units): the arm runs along local -X, barrel = gun -Z
+const CHAR_MODEL={vanguard:'char_vanguard',ranger:'char_ranger',bulwark:'char_bulwark'};
+const GUN_MODEL={vanguard:'gun_vanguard',ranger:'gun_ranger',bulwark:'gun_bulwark'};
 function buildAvatarModel(ch){
+  if(MODELS.ok&&MODELS.items[CHAR_MODEL[ch.id]]){
+    const c=spawnCharacter(CHAR_MODEL[ch.id]); c.group.rotation.y=Math.PI;   // Kenney rigs face +Z; the game's forward is -Z
+    const g=new THREE.Group(); g.add(c.group);
+    const gunObj=new THREE.Group(); gunObj.name='gun';
+    const gunModel=spawnProp(GUN_MODEL[ch.id]); if(gunModel){ gunObj.add(gunModel); }
+    const arm=c.bones['arm-right'];
+    if(arm){ gunObj.position.fromArray(GUN_MOUNT.pos).divideScalar(c.scale); gunObj.rotation.fromArray(GUN_MOUNT.rot); gunObj.scale.setScalar(GUN_MOUNT.scale/c.scale); arm.add(gunObj); }
+    else { gunObj.position.set(.3,1.2,-.2); g.add(gunObj); }
+    /* muzzle: far end of the gun bounds along its barrel axis */
+    const muzzle=new THREE.Object3D(); muzzle.name='muzzle';
+    if(gunModel){ const b=new THREE.Box3().setFromObject(gunModel); const sz=b.getSize(new THREE.Vector3()); const axis=sz.z>=sz.x?'z':'x';
+      muzzle.position.set(axis==='x'?b.max.x:0,(b.min.y+b.max.y)/2+sz.y*0.15,axis==='z'?b.min.z:0); }
+    gunObj.add(muzzle);
+    g.userData.animator=c.animator; g.userData.bones=c.bones; g.userData.model=true; g.userData.tw=.72; g.userData.muzzleZ=-1.1;
+    return g;
+  }
+  return buildAvatarProcedural(ch);
+}
+function buildAvatarProcedural(ch){
   const g=new THREE.Group();
   const suit=new THREE.MeshStandardMaterial({color:ch.color,roughness:.5,metalness:.35});
   const dark=new THREE.MeshStandardMaterial({color:0x1a2230,roughness:.7,metalness:.3});
@@ -60,13 +83,17 @@ function buildAvatarModel(ch){
   g.userData.muzzleZ=-(bl*.66+(light?.7:.5))-.1; g.userData.tw=tw;
   return g;
 }
+let avatarAnim=null, avatarBones=null;
 function rebuildAvatar(){
   while(avatar.children.length)avatar.remove(avatar.children[0]);
   const m=buildAvatarModel(CH()); while(m.children.length){ avatar.add(m.children[0]); }
-  gun=avatar.getObjectByName('gun');
+  gun=avatar.getObjectByName('gun'); avatarAnim=m.userData.animator||null; avatarBones=m.userData.bones||null;
   flash=new THREE.PointLight(0xffd08a,0,7,2); flash.position.set(0,1.3,-1.1); avatar.add(flash);
   flashMesh=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),new THREE.MeshBasicMaterial({color:0xffd9a0,transparent:true,opacity:0}));
-  flashMesh.position.set(m.userData.tw*.61,1.28,m.userData.muzzleZ); avatar.add(flashMesh);
+  const muz=avatar.getObjectByName('muzzle');
+  if(muz){ muz.add(flashMesh); flashMesh.position.set(0,0,0); }
+  else { flashMesh.position.set(m.userData.tw*.61,1.28,m.userData.muzzleZ); avatar.add(flashMesh); }
+  if(avatarAnim)avatarAnim.play('holding-right',0);
   shieldMesh.visible=false; avatar.add(shieldMesh);
 }
 const shieldMesh=new THREE.Mesh(new THREE.SphereGeometry(1.25,20,14),new THREE.MeshBasicMaterial({color:0x6fe3ff,transparent:true,opacity:.22,wireframe:true}));

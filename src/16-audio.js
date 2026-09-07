@@ -1,6 +1,6 @@
 /* ============================ audio ============================ */
 let AC=null, master=null;
-function audio(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=0.9; master.connect(AC.destination);}catch(e){} }
+function audio(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=(typeof SETTINGS!=='undefined')?SETTINGS.volume:0.9; master.connect(AC.destination);}catch(e){} }
   if(AC&&AC.state==='suspended')AC.resume(); return AC; }
 function blip(o){
   const ac=audio(); if(!ac)return;

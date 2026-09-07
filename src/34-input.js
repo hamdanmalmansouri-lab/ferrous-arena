@@ -37,11 +37,11 @@ addEventListener('mouseup',e=>{ if(e.button===0)keys.mouse=false; });
 addEventListener('contextmenu',e=>{ if(pointerLocked)e.preventDefault(); });
 addEventListener('blur',()=>{ keys.w=keys.a=keys.s=keys.d=keys.shift=keys.mouse=keys.space=false; });
 
-const SENS=0.0022;
 addEventListener('mousemove',e=>{
   if(!pointerLocked)return;
+  const SENS=MOUSE_SENS_BASE*SETTINGS.mouseSens;
   player.yaw-=e.movementX*SENS;
-  player.pitch-=e.movementY*SENS;
+  player.pitch-=e.movementY*SENS*(SETTINGS.invertY?-1:1);
   player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
 });
 document.addEventListener('pointerlockchange',()=>{

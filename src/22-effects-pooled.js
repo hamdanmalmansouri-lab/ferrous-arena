@@ -62,9 +62,11 @@ function dropPickup(pos,kind){
     const ring=new THREE.Mesh(new THREE.TorusGeometry(.5,.04,6,24),basicMat(0xffd166));
     ring.rotation.x=Math.PI/2; g.add(oct,ring,glowSprite(0xffd166,2.6));
   }else if(kind==='crate'){
-    const box=new THREE.Mesh(new THREE.BoxGeometry(1,.8,1),stdMat(0x2c3745,.6,.4));
-    const trim=new THREE.Mesh(new THREE.BoxGeometry(1.06,.16,1.06),basicMat(0xffd166));
-    box.castShadow=true; const gl=glowSprite(0xffd166,3.2); gl.position.y=.6; g.add(box,trim,gl);
+    const m=MODELS.ok?spawnProp('crate'):null;
+    if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=1.1/Math.max(sz.x,sz.z); m.scale.setScalar(k); m.position.y=-b.min.y*k-.4; g.add(m); }
+    else { const box=new THREE.Mesh(new THREE.BoxGeometry(1,.8,1),stdMat(0x2c3745,.6,.4)); box.castShadow=true; g.add(box); }
+    const trim=new THREE.Mesh(new THREE.TorusGeometry(.75,.05,6,24),basicMat(0xffd166)); trim.rotation.x=Math.PI/2; trim.position.y=-.35;
+    const gl=glowSprite(0xffd166,3.2); gl.position.y=.6; g.add(trim,gl);
   }else{
     const a=new THREE.Mesh(new THREE.BoxGeometry(.46,.15,.15),basicMat(0x3ddc84));
     const b=new THREE.Mesh(new THREE.BoxGeometry(.15,.46,.15),basicMat(0x3ddc84));

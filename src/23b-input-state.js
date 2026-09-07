@@ -11,8 +11,12 @@ const inp={f:0,r:0,fire:false,sprint:false,jump:false,moving:false};
 const touch={active:false,move:{x:0,y:0,len:0},fire:false,jump:false,stickId:null,lookId:null,lookX:0,lookY:0,
              assist:true,autoFire:false,sens:0.0045};
 const pad={connected:false,prev:[],fire:false,f:0,r:0,sprint:false,jump:false};
+const SETTINGS={touchSens:save.get('touchSens',1.0),mouseSens:save.get('mouseSens',1.0),padSens:save.get('padSens',1.0),
+  volume:save.get('volume',0.9),invertY:save.get('invertY',false),overlay:false};
+const TOUCH_SENS_BASE=0.0085, MOUSE_SENS_BASE=0.0022, PAD_SENS_BASE=2.8;
+function applySettings(){ touch.sens=TOUCH_SENS_BASE*SETTINGS.touchSens; if(master)master.gain.value=SETTINGS.volume; }
 const AUTO_FIRE=save.get('autofire',false), AIM_ASSIST=save.get('aimassist',true);
-touch.autoFire=!!AUTO_FIRE; touch.assist=AIM_ASSIST!==false;
+touch.autoFire=!!AUTO_FIRE; touch.assist=AIM_ASSIST!==false; applySettings();
 
 function readInput(){
   inp.f=(keys.w?1:0)-(keys.s?1:0); inp.r=(keys.d?1:0)-(keys.a?1:0);
@@ -42,8 +46,8 @@ function pollGamepad(dt){
   const lm=Math.hypot(lx,ly);
   if(lm>PAD_DEAD){ const k=(lm-PAD_DEAD)/(1-PAD_DEAD)/lm; pad.f=-ly*k; pad.r=lx*k; pad.sprint=lm>0.92; } else { pad.f=pad.r=0; pad.sprint=false; }
   const rm=Math.hypot(rx,ry);
-  if(rm>PAD_DEAD&&state.running){ const k=(rm-PAD_DEAD)/(1-PAD_DEAD); const curve=k*k*2.8;
-    player.yaw-=rx/rm*curve*dt; player.pitch-=ry/rm*curve*0.7*dt; player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch)); }
+  if(rm>PAD_DEAD&&state.running){ const k=(rm-PAD_DEAD)/(1-PAD_DEAD); const curve=k*k*PAD_SENS_BASE*SETTINGS.padSens;
+    player.yaw-=rx/rm*curve*dt; player.pitch-=ry/rm*curve*0.7*dt*(SETTINGS.invertY?-1:1); player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch)); }
   const pressed=i=>!!(b[i]&&(b[i].pressed||b[i].value>0.5));
   const edge=i=>{ const now=pressed(i), was=!!pad.prev[i]; pad.prev[i]=now; return now&&!was; };
   pad.fire=pressed(7);                              // RT

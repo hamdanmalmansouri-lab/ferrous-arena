@@ -36,7 +36,7 @@ if(TOUCH){
       stickEl.firstElementChild.style.transform='translate('+dx+'px,'+dy+'px)';
     }else if(e.pointerId===touch.lookId&&state.running){
       const dx=e.clientX-touch.lookX, dy=e.clientY-touch.lookY; touch.lookX=e.clientX; touch.lookY=e.clientY;
-      player.yaw-=dx*touch.sens; player.pitch-=dy*touch.sens*0.85;
+      player.yaw-=dx*touch.sens; player.pitch-=dy*touch.sens*0.85*(SETTINGS.invertY?-1:1);
       player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
     }
   },{passive:true});

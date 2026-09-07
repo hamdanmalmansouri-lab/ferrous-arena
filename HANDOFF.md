@@ -1,7 +1,7 @@
 # Ferrous Arena — Project Handoff
 
-**Status:** playable v2.3 (roadmap phases 1, 2a/2b, 4 — performance, touch/gamepad, PWA, pathfinding + stages), verified error-free in
-headless Chromium including touch emulation and per-map navigation traces. Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
+**Status:** playable v2.4 (roadmap phases 1, 2a/2b, 4, 3 + most of 5 — performance, touch/gamepad, PWA, pathfinding + stages,
+glTF characters with skeletal animation, settings screen), verified error-free in headless Chromium (five suites). Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
 **Deliverables:** `ferrous-arena.html` (standalone, open and play) and `docs/` (GitHub Pages PWA for phones).
 **Live copy:** published as a private Claude artifact (same URL since v1).
 
@@ -11,7 +11,8 @@ headless Chromium including touch emulation and per-map navigation traces. Deskt
 
 A third-person **roguelite wave shooter** in the spirit of Risk of Rain, running entirely in a browser tab.
 Three.js r128 (global `THREE`, non-module build) from cdnjs; everything else is inline in one IIFE.
-No assets: procedural geometry, WebAudio-synthesised sound, canvas-generated sky and text labels.
+Characters, weapons, targets and crates are Kenney CC0 glTF models packed into the file (`ATTRIBUTION.md`); everything else is procedural
+geometry, WebAudio-synthesised sound and canvas-generated labels. If the packed models fail to parse the game falls back to the v2 box models.
 
 **Flow:** Main menu → Lobby (pick an operative, warm up on the range) → Deploy → waves of robots →
 supply crate with an item after every wave → **Warden boss every 5 waves** (3 items on kill) → **stage portal** → new map with a
@@ -60,6 +61,22 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 - **Dummy** (grey) — practice-range only, wanders, never attacks, respawns 2 s after death.
 - Scaling: `hp = (34 + wave*9) * (1 + wave*0.035)`, speed `+min(wave*0.16, 2)`; boss waves spawn half the normal count.
 
+### Models and animation (`05-gltfloader`, `06-assets`, `07-models`)
+- `tools/pack-assets.js <kenney-3d-dir>` picks files (`PICK` map: 3 operatives, 3 enemy variants, dummy, 4 blasters, target, crate), strips the
+  embedded colormap and unused clips, keeps the 10 clips we use in `char_vanguard` only (all Mini Characters share one rig), and writes
+  `src/06-assets.js` (`ASSET_DATA`, ~1.5 MB base64). Re-run it after changing `PICK`.
+- `loadModels()` runs at boot behind a progress bar (`GLTFLoader.parse` per model, shared `THREE.Texture` per pack, nearest-filter palette).
+  `spawnCharacter(id,tint)` → `SkeletonUtils.clone`, scaled to `CHAR_HEIGHT` 1.75 m, per-instance material clone with colour tint, plus an
+  `animator`. `spawnProp(id)` for static props. `makeAnimator()` is a small crossfade state machine over `AnimationMixer`
+  (`play(name,fade,once,timeScale)`, `finished()`).
+- Rig facts: Kenney rigs face **+Z** (game forward is −Z, so instances get `rotation.y=π`); bones `root, torso, head, arm-left/right, leg-left/right`;
+  the arm runs along the bone's local **−X**. Weapons mount on `arm-right` with `GUN_MOUNT` (raw model units, barrel = gun −Z → `rot.y=π/2`).
+  A `muzzle` Object3D at the barrel tip carries the flash mesh, so tracers start from the real gun.
+- States: player → `jump/fall/holding-right-shoot/sprint/walk/holding-right` (torso bone gets the aim pitch after the mixer update);
+  Rusher/Warden → `sprint|walk/idle/attack-melee-right`; Lancer → `walk/holding-right/holding-right-shoot`; dummy → `walk/idle`.
+  Death: `removeEnemy(e,true)` strips the hit boxes, plays `die` once and parks the group in `corpses[]` for 1.4 s (sinks at the end).
+- Lobby pods and the menu backdrop run `idle` through `podAnims[]`.
+
 ### Maps and stages (`19-world`, `19b-maps`)
 `clearWorld()` empties the `world` group and every registry, then a builder repopulates `boxes[]`, `colliderMeshes[]`,
 `interactables[]`, `spinners[]`, `targets[]`, `mapData` and ends with `finalizeWorld()` (geometry merge + **nav grid bake**).
@@ -89,7 +106,8 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 | `docs/` | Generated. **GitHub Pages site / PWA**: `index.html` (standalone + manifest link + SW registration + iOS metas), `manifest.webmanifest`, `sw.js` (cache version = bundle hash), icons, `.nojekyll`. |
 | `site/` | Hand-maintained PWA assets copied into `docs/` by the build (manifest, `sw.js` template, PNG icons). |
 | `test-local.html` | Generated. cdnjs script rewritten to `./node_modules/three/build/three.min.js` for headless tests. |
-| `test.js` … `test4.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages). |
+| `test.js` … `test5.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages · models/settings/death anim). All wait for `MODELS.ready`. |
+| `tools/pack-assets.js`, `ATTRIBUTION.md` | asset packer (needs the Kenney `3d/` tree) and licences. |
 | `README.md` | Player-facing readme + GitHub Pages / install steps. |
 | `ROADMAP.md` | Phased plan; tick items there as they ship. |
 
@@ -104,6 +122,7 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | File | Contents |
 |---|---|
 | `00-prelude` | THREE presence check |
+| `05-gltfloader`, `06-assets`, `07-models` | inlined GLTFLoader + SkeletonUtils; packed `ASSET_DATA`; `loadModels`, `spawnCharacter`, `spawnProp`, `makeAnimator` |
 | `11-constants`, `12-data-characters`, `13-data-items` | tuning constants, `CHARS[]` (abilities carry a `short` touch label), `ITEMS[]` |
 | `14-dom`, `15-persistence` | cached element handles (HUD + touch layer); `save.get/set` (localStorage `fa2.*`, try/catch) |
 | `16-audio` | `blip`, `noise`, `SFX`, single `master` GainNode |
@@ -111,12 +130,12 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | `18-renderer-scene` | renderer, lights, sky; `applyQuality(tier)`, `setQuality('auto'|tier)` |
 | `19-world` | `mergeGeos()`, `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits one mesh per material **and calls `navBuild()`**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildLobby/buildRange`, `addTarget` |
 | `19b-maps` | `mapData`, `buildFoundry/buildRelay/buildFrost/buildReactor`, `MAPS[]`, `MODS[]`, `mulberry32`, `makeRunOrder(seed)`, `stageMap()`, `stageMod()` |
-| `20-player` | `player`, `run`, `computeStats()`, `buildAvatarModel(ch)`, `rebuildAvatar()` |
-| `21-enemies` | `MAT_HIDDEN`, `basicMat()` cache, shared limb geometries, `enemyGeo(type)`, `makeEnemy` (adds `speedMul`, path fields), `removeEnemy`, `spawnDummy` |
+| `20-player` | `player`, `run`, `computeStats()`, `GUN_MOUNT`, `buildAvatarModel(ch)` (glTF or `buildAvatarProcedural`), `rebuildAvatar()` (`avatarAnim`, `avatarBones`) |
+| `21-enemies` | `ENEMY_MODEL/ENEMY_TINT`, `corpses[]`, `makeEnemy` (glTF or `buildEnemyProcedural`) → `finishEnemy` (hit boxes, stats, `animator`, `attackT/shootT`), `removeEnemy(e,keepCorpse)`, `spawnDummy` |
 | `21b-nav` | `navBuild`, `navCell/navHeightAt/navOpenAt/navCentre/navNearestOpen`, `navPath` (A*), `navClear` (Bresenham), `navSteer(e,target,out,dt)` |
 | `22-effects` | **pools**: `TRACER_POOL` (48, geometry rewritten in place), `SPARK_POOL` (240, fade by scale, count × `Q.cfg.fx`), `PROJ_POOL` (160, no lights — `glowSprite()`), `dropPickup` |
 | `23-state` | `state` (`mode` ∈ menu/lobby/range/run), `rangeStats`, `keys` |
-| `23b-input-state` | `TOUCH` detection (`?touch=1/0` override), `inp` (merged per-step input), `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
+| `23b-input-state` | `TOUCH` detection, **`SETTINGS`** (touch/mouse/pad sensitivity multipliers, volume, invert Y; `applySettings()`), `inp`, `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
 | `24-math-helpers` | scratch vectors (`_v1.._v3`, `_fwd`, `_camF`…), `forwardInto(out,…)`, `resolveXZ`, `supportHeight`, `lineOfSight` |
 | `25-hud-helpers` | `syncHUD` (ability, boss bar, touch button, stage), `syncCompass` (crates/items/boss/portal bearings), `syncItems`, `syncRange`, `setMode` |
 | `26-items`, `27-characters` | `giveItem(id)`, `selectChar(i, inLobby)` |
@@ -127,7 +146,7 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | `33-mode-transitions` | `resetPlayerFor`, `goLobby/goRange`, `goRun(seed?)` (seed from arg / `?seed=` / clock → `run.order`, `buildStage(1)`), `resumePlay()`, `enterPlay()` |
 | `34-input` | keyboard/mouse/pointer-lock; unlocking pauses (run/range) or opens the roster (lobby) |
 | `34b-touch` | pointer-event joystick (floating, 50 px radius), look-drag, held buttons with pointer capture, `syncTouchHUD()`; iOS scroll/zoom suppression |
-| `35-screens`, `36-boot` | `showMenu` (quality + touch toggles), `showCodex`, `showLobbyPanel`, `showPause`, `gameOver`; `window.__ARENA__` |
+| `35-screens`, `36-boot` | `showMenu`, **`showSettings(back)`** (quality, 4 sliders, invert Y, aim assist/auto-fire on touch, FPS overlay), `showCodex`, `showLobbyPanel`, `showPause` (has Settings), `gameOver`; boot shows a loading bar until `loadModels()` resolves; `window.__ARENA__` |
 
 ### Three things worth understanding before editing
 
@@ -151,7 +170,8 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 - Difficulty: `makeEnemy` hp/speed lines, `startWave` counts, `spawnOne` shooter share, boss timers in the boss branch of `update`.
 - Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`, 3.5 after a portal. Alive cap 16 in the spawn block (summons up to 20).
 - Nav: `NAV_STEP`, `NAV_RADIUS`, repath interval in `navSteer`, `maxExpand` 2500. Stage: `MODS[]` effects in `spawnOne`/`killEnemy`/`dropPickup`/movement; boss patterns in the boss branch; reactor `period` in `buildReactor`.
-- Touch: `touch.sens` (look), `STICK_R`, aim-assist cone `bestAng=0.07` and pull `7 / 3` in `aimAssist`. Gamepad curve in `pollGamepad`.
+- Touch: `TOUCH_SENS_BASE` 0.0085 × `SETTINGS.touchSens`; `MOUSE_SENS_BASE` 0.0022; `PAD_SENS_BASE` 2.8; `STICK_R`; aim-assist cone/pull in `aimAssist`.
+- Models: `CHAR_HEIGHT`, `GUN_MOUNT`, `ENEMY_TINT`, clip `timeScale` formulas in the loop, corpse time 1.4 s.
 - Quality: `TIERS` table; probe thresholds in `frame()`.
 - Camera/FOV: `dist=5.15`, offset `0.72`, FOV 66.
 
@@ -168,6 +188,7 @@ node test.js    # menu, lobby E/1-2-3 select, range portal, blink, run, all 10 i
 node test2.js   # aimed fire on the range, chaser damage, barrier, wave clear -> crate -> pickup -> next wave
 node test3.js   # touch: layer on, lobby without pointer lock, joystick moves, look-drag, FIRE/ability/pause buttons, aim assist drift
 node test4.js   # stages: nav grid per map, 3 Rushers close on the player on every map (incl. Relay platform top), portal -> next stage, Mk2 summons, reactor pulse
+node test5.js   # models parsed (13 items, 10 clips), settings sliders persist, enemies animate, kill -> corpse, draw calls
 ```
 
 Launch flags: `--use-gl=swiftshader --enable-unsafe-swiftshader --no-sandbox`. Simulation is fixed-step, so results are
@@ -185,7 +206,7 @@ Acceptance bar: `ERRORS: none` in all three, range `hits > 0`, player HP drops o
 touch joystick moves the player and aim assist drifts yaw toward an off-centre target, and in `test4.js` every map's enemy
 distances fall over ~10 s with at least one enemy reaching `y=3` on Relay.
 
-Measured: ~105–135 draw calls / ~3.5k triangles with 16 enemies (v2 was ~330 calls). Desktop: 120 fps at High on an RTX 5090.
+Measured: ~70 draw calls / ~17k triangles with 16 glTF enemies (v2 was ~330 calls / 3.7k tris). Desktop: 120 fps at High on an RTX 5090 (v2.1).
 
 ---
 
@@ -193,9 +214,12 @@ Measured: ~105–135 draw calls / ~3.5k triangles with 16 enemies (v2 was ~330 c
 
 Roughly in value order (details in `ROADMAP.md`):
 
-1. **Procedural box models / sine-wave animation** — phases 3 and 5.
-2. **Nav is 2.5D** — no overhangs/bridges you can walk under; enemies occasionally jostle each other off a stair for a moment (separation force).
-3. **Stage count is unbounded but only 4 maps** — stage 5 wraps to the shuffled order; more builders slot straight into `MAPS[]`.
+1. **Art direction is Kenney's toy style** (chibi Mini Characters, foam blasters) — the only rigged, animated CC0 set reachable from the build
+   sandbox. Swapping to sci-fi rigs later only needs new GLBs with the same bone names in `PICK`, or a different `GUN_MOUNT` per rig.
+2. **Animation layering is whole-body** — firing while running shows the shoot clip, not legs + upper body. `AnimationUtils.makeClipAdditive`
+   on an upper-body-masked shoot clip is the next step (roadmap phase 5).
+3. **Nav is 2.5D** — no overhangs/bridges you can walk under; enemies occasionally jostle each other off a stair for a moment (separation force).
+4. **Stage count is unbounded but only 4 maps** — stage 5 wraps to the shuffled order; more builders slot straight into `MAPS[]`.
 4. **Store wrappers not started** (2c): Capacitor project, Play/TestFlight builds — needs developer accounts and a Mac for iOS.
 5. **Phone verification pending** — touch was verified with Chromium touch emulation; a real Android/iOS pass is the phase 2 acceptance.
 6. **Alive cap still 16** — batching leaves headroom; profile on a phone before raising it.
@@ -210,4 +234,5 @@ Roughly in value order (details in `ROADMAP.md`):
 - Keep `arena.body.html` free of doctype/html/head/body tags — the Artifact tool supplies the skeleton.
 - No dynamic lights on transient objects (§4). Add lights only in map builders.
 - Loop code reads `inp`, never `keys`/`touch`/`pad` directly.
+- Never edit `src/06-assets.js` by hand; change `PICK` in `tools/pack-assets.js` and re-run it.
 - Every map builder must end with `finalizeWorld()` (it bakes the nav grid) and must not leave anything the enemies need to walk under.

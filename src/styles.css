@@ -239,3 +239,10 @@
 @media (pointer:coarse){ #compass{top:calc(52px + env(safe-area-inset-top));width:min(360px,44vw)} #bossbar{top:calc(78px + env(safe-area-inset-top))} }
 #fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .45s;z-index:6}
 #fade.on{opacity:1}
+
+/* ---------- settings ---------- */
+.sets{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+.set{display:grid;grid-template-columns:1fr 2fr 56px;align-items:center;gap:12px;font-size:13px;color:var(--dim)}
+.set b{color:var(--txt);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+.set input[type=range]{width:100%;accent-color:var(--accent);height:24px}
+@media (pointer:coarse){ .set{grid-template-columns:1fr 1.6fr 52px;font-size:12px} .set input[type=range]{height:32px} }

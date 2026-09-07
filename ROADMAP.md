@@ -52,7 +52,7 @@ Legend: `[x]` shipped · `[ ]` open · **AC** acceptance criteria
 - [x] PWA: `docs/` site built by `build.js` — manifest (fullscreen, landscape, maskable icon), service worker precache with per-build version, iOS home-screen metas
 - [x] `test3.js` touch-emulation harness; README with GitHub Pages + install steps
 
-### v2.3 — Phase 4: pathfinding, stages, four maps (current)
+### v2.3 — Phase 4: pathfinding, stages, four maps
 - [x] Nav grid baked per map (1 m cells, ground height + open flag, 2.5D), A* with binary heap and corner-cut prevention, per-enemy path cache with string-pulling, straight-line steering inside 3 m; enemies follow ground height (stairs, platforms)
 - [x] Stage flow: Warden death opens a portal (interactable, compass marker), wave loop pauses, E → fade → next map; wave counter continues; 60% HP floor on arrival
 - [x] Map registry with seeded order (`?seed=`, shown on pause/death, "Replay this seed" button); best stage persisted
@@ -62,7 +62,15 @@ Legend: `[x]` shipped · `[ ]` open · **AC** acceptance criteria
 - [x] Compass strip (crates, items, boss, portal with distances); Stage counter in the top bar
 - [x] `test4.js`: nav trace on every map, portal transition, Mk2 summon, reactor pulse
 
-Known gaps carried forward: procedural box models, keyframe-free animation, no store wrappers, phone verification pending.
+### v2.4 — Phase 3 (+ most of 5): glTF models, skeletal animation, settings (current)
+- [x] Asset pipeline: `tools/pack-assets.js` strips colormaps/unused clips from Kenney CC0 GLBs, shares one rig's clips across all characters, emits `src/06-assets.js`; GLTFLoader + SkeletonUtils inlined; loading bar at boot; procedural fallback if parsing fails
+- [x] Operatives, enemies (tinted per type), Warden, dummies as skinned Mini Characters; blasters mounted on the hand bone with a real muzzle point; range targets and crates from the Blaster kit
+- [x] Animation state machine (crossfades): idle/walk/sprint/jump/fall/shoot for the player with aim pitch on the torso; sprint/attack for Rushers and the Warden; walk/aim/shoot for Lancers; `die` clip on death via a corpse list; lobby pods idle
+- [x] Settings screen (main menu + pause): quality, touch / mouse / controller sensitivity sliders, volume, invert Y, aim assist, auto-fire, FPS overlay — persisted; touch look default raised ~1.9×
+- [x] `test5.js`
+- Result: ~70 draw calls / ~17k tris with 16 enemies; bundle 1.8 MB (was 125 KB) — still far under the artifact cap; phone verification of load time pending
+
+Known gaps carried forward: Kenney toy art style (only reachable rigged CC0 set), whole-body animation layering, no store wrappers.
 
 ---
 
@@ -115,16 +123,16 @@ Known gaps carried forward: procedural box models, keyframe-free animation, no s
 
 **Goal:** replace the box-people with real low-poly characters, weapons and enemies while staying within the single-file / no-external-fetch constraint for the artifact.
 
-- [ ] **Art direction sheet first** (one page in `docs/`): low-poly sci-fi, hard edges, 2-tone materials, ~1.5k tris per character, 600 per enemy, 6k for the Warden. Palette locked to the three operative colours + enemy red/purple/gold.
-- [ ] **Pipeline.** Author or source CC0 glTF models (Kenney, Quaternius, or Blender-built), run through `gltf-transform` (`dedup`, `prune`, `weld`, `quantize`, `draco` or `meshopt`), inline `GLTFLoader` + `DRACOLoader` (three/examples, r128) into the file, embed the `.glb` as a base64 data URI. Budget: ≤ 2.5 MB of model data total so the artifact stays well under 16 MB and mobile first-load stays quick.
-- [ ] **Loading screen** with a progress bar (models decode asynchronously; menu can show while they stream in).
-- [ ] **Operatives:** one shared humanoid rig with three material/attachment variants (helmet, shoulder pads, scope) to keep the file small; per-operative weapon meshes; muzzle socket as a named empty in the glTF (replaces the hard-coded `muzzleZ`).
-- [ ] **Enemies:** Rusher (quadruped or hunched biped), Lancer (tall, cannon arm), Warden (twice-height, crest, glowing core = weak point → new headshot-style multiplier). Hit boxes stay as invisible primitives sized from the mesh bounding boxes.
-- [ ] **Props:** crates, pickups (item octahedron → a floating "module" model), portals, pods, range targets.
-- [ ] **Materials:** `MeshStandardMaterial` with a tiny 2-tone matcap or flat vertex colours — no PBR textures (they are the file-size killer). Emissive slots for visors, cores, portals.
-- [ ] Keep the procedural box models behind a `USE_FALLBACK_MODELS` flag so the game still boots if decoding fails.
+- [x] **Art direction (decided by availability)** Kenney Mini Characters + Blaster kit; sci-fi rigs can replace them later through the same packer. (one page in `docs/`): low-poly sci-fi, hard edges, 2-tone materials, ~1.5k tris per character, 600 per enemy, 6k for the Warden. Palette locked to the three operative colours + enemy red/purple/gold.
+- [x] **Pipeline.** Author or source CC0 glTF models (Kenney, Quaternius, or Blender-built), run through `gltf-transform` (`dedup`, `prune`, `weld`, `quantize`, `draco` or `meshopt`), inline `GLTFLoader` + `DRACOLoader` (three/examples, r128) into the file, embed the `.glb` as a base64 data URI. Budget: ≤ 2.5 MB of model data total so the artifact stays well under 16 MB and mobile first-load stays quick.
+- [x] **Loading screen** with a progress bar (models decode asynchronously; menu can show while they stream in).
+- [x] **Operatives:** one shared humanoid rig with three material/attachment variants (helmet, shoulder pads, scope) to keep the file small; per-operative weapon meshes; muzzle socket as a named empty in the glTF (replaces the hard-coded `muzzleZ`).
+- [x] **Enemies:** *(tinted character variants for now; Warden is a scaled gold variant with a crest)* Rusher (quadruped or hunched biped), Lancer (tall, cannon arm), Warden (twice-height, crest, glowing core = weak point → new headshot-style multiplier). Hit boxes stay as invisible primitives sized from the mesh bounding boxes.
+- [x] **Props:** crates and range targets crates, pickups (item octahedron → a floating "module" model), portals, pods, range targets.
+- [x] **Materials:** one 512² palette per pack, nearest-filtered `MeshStandardMaterial` with a tiny 2-tone matcap or flat vertex colours — no PBR textures (they are the file-size killer). Emissive slots for visors, cores, portals.
+- [x] Keep the procedural box models behind a `USE_FALLBACK_MODELS` flag so the game still boots if decoding fails.
 
-**AC:** every actor rendered from glTF on all three maps; standalone file ≤ 6 MB; artifact publishes without hitting the size cap; draw calls do not exceed the phase-1 budget; first playable frame ≤ 3 s on a phone on 4G.
+**AC:** every actor rendered from glTF on all maps ✅; standalone file ≤ 6 MB ✅ (1.8 MB); artifact publishes ✅; draw calls within budget ✅ (~70); first playable frame ≤ 3 s on a phone on 4G (**needs a phone check — the loading bar shows progress**).
 
 ---
 
@@ -153,8 +161,8 @@ Known gaps carried forward: procedural box models, keyframe-free animation, no s
 **Goal:** characters that read as alive — locomotion blends, aim, recoil, hit and death reactions — driven by the glTF rigs from phase 3.
 
 - [ ] **Animation clips** authored in Blender (or Mixamo-retargeted) on the shared humanoid rig: idle, walk, run, strafe L/R, jump/fall/land, fire, reload, ability cast, hit, death (2 variants). Enemies: idle, run, attack, hit, death; Warden: idle, walk, charge, burst, death.
-- [ ] **`AnimationMixer` per actor** with a small state machine: locomotion blend tree driven by velocity (idle↔walk↔run, strafe weights from lateral speed), additive upper-body layer for aim/fire/reload so legs keep running while shooting.
-- [ ] **Aim IK-lite:** spine/head bones rotated toward the camera pitch each frame (replaces `gun.rotation.x` hack); weapon parented to the hand bone.
+- [x] **`AnimationMixer` per actor** *(locomotion crossfades; the additive upper-body layer is still open)* with a small state machine: locomotion blend tree driven by velocity (idle↔walk↔run, strafe weights from lateral speed), additive upper-body layer for aim/fire/reload so legs keep running while shooting.
+- [x] **Aim IK-lite:** torso bone pitched after the mixer update spine/head bones rotated toward the camera pitch each frame (replaces `gun.rotation.x` hack); weapon parented to the hand bone.
 - [ ] **Procedural layers:** recoil kick on fire, camera shake on boss burst/charge, hit-flinch via a 120 ms additive pose, ragdoll-free death (play clip, sink through the floor, pool the actor).
 - [ ] **Dummies in the range** cycle idle/walk/hit so animation can be tested without a live fight; add an animation-debug panel (clip name, blend weights).
 - [ ] **Mobile budget:** ≤ 40 mixers active; enemies beyond 25 m update animation at 15 Hz; instanced crowd uses vertex-animation textures if skinned instancing proves too costly (decide after measuring).
@@ -183,7 +191,7 @@ Known gaps carried forward: procedural box models, keyframe-free animation, no s
 | 1 | Performance & architecture ✅ | M | — |
 | 2a/2b | Touch + PWA ✅ | M | 1 |
 | 4 (nav + stage flow + 4 maps) | Maps ✅ | M | 1 |
-| 3 | Models | L | 1 (budget), loading screen |
+| 3 | Models ✅ (Kenney) | L | 1 (budget), loading screen |
 | 5 | Animations | L | 3 |
 | 4 (more maps, per-map boss arenas) | Maps, part 2 | M | 3, 5 |
 | 2c | Store builds | S–M | 2a, 2b, 3 |

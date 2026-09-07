@@ -6,6 +6,7 @@ const colliderMeshes=[];         // meshes for raycasts
 const interactables=[];          // {pos,r,label,action}
 const spinners=[];               // {obj,speed}
 const targets=[];                // practice-range targets
+const podAnims=[];               // lobby pod idle animators
 let targetHitMeshes=[];
 
 /* merge a list of {geo, matrix} into one indexed BufferGeometry (position/normal/uv) */
@@ -101,6 +102,7 @@ function clearWorld(){
   boxes.length=0; colliderMeshes.length=0; interactables.length=0; spinners.length=0;
   targets.length=0; targetHitMeshes=[];
   for(let i=enemies.length-1;i>=0;i--)removeEnemy(enemies[i]);
+  corpses.forEach(c=>scene.remove(c.g)); corpses.length=0; podAnims.length=0;
   projectiles.forEach(p=>releaseProjectile(p)); projectiles.length=0;
   pickups.forEach(p=>scene.remove(p.g)); pickups.length=0;
   sparks.forEach(s=>{s.m.visible=false;}); sparks.length=0;
@@ -125,6 +127,7 @@ function buildLobby(){
     const ring=new THREE.Mesh(new THREE.TorusGeometry(1.75,.07,8,40),new THREE.MeshBasicMaterial({color:ch.color}));
     ring.rotation.x=Math.PI/2; ring.position.set(x,.52,z); world.add(ring);
     const disp=buildAvatarModel(ch); disp.position.set(x,.5,z); world.add(disp); spinners.push({obj:disp,speed:.5,axis:'y'});
+    if(disp.userData.animator){ disp.userData.animator.play('idle',0); podAnims.push(disp.userData.animator); }
     const l=new THREE.PointLight(ch.color,1.2,8,2); l.position.set(x,3.2,z); world.add(l);
     const lab=makeLabel(ch.name.toUpperCase(),ch.css,.8); lab.position.set(x,3.4,z); world.add(lab);
     const sub=makeLabel(ch.role,'#8fa2bd',.5); sub.position.set(x,2.85,z); world.add(sub);
@@ -167,6 +170,14 @@ function buildRange(){
 }
 function addTarget(x,z,moving){
   const g=new THREE.Group();
+  if(MODELS.ok&&MODELS.items.target){
+    const plate=new THREE.Group(); const m=spawnProp('target'); const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3());
+    const k=1.9/Math.max(sz.y,0.01); m.scale.setScalar(k); m.position.y=-b.min.y*k; plate.add(m);
+    const hit=new THREE.Mesh(new THREE.BoxGeometry(sz.x*k,sz.y*k,Math.max(.25,sz.z*k)),MAT_HIDDEN); hit.position.y=sz.y*k/2; plate.add(hit);
+    g.add(plate); g.position.set(x,0,z); g.rotation.y=Math.PI; world.add(g);
+    const t={g:g,plate:plate,hit:hit,down:0,moving:moving,x0:x,ph:Math.random()*6};
+    hit.userData.target=t; targets.push(t); targetHitMeshes.push(hit); return;
+  }
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,1.2,8),new THREE.MeshStandardMaterial({color:0x2a3442,metalness:.6,roughness:.5}));
   pole.position.y=.6; g.add(pole);
   const plate=new THREE.Group(); plate.position.y=1.2;

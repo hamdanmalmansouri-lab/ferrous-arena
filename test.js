@@ -7,7 +7,7 @@ const path = require('path');
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
   await page.goto('file://' + path.resolve('test-local.html'));
-  await page.waitForTimeout(1500);
+  await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
   const has = await page.evaluate(() => !!window.__ARENA__);
   console.log('game object:', has);
   console.log('menu card text:', (await page.textContent('#card')).slice(0, 80).replace(/\s+/g, ' '));
