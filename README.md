@@ -1,0 +1,40 @@
+# Ferrous Arena
+
+Third-person roguelite wave shooter in a single HTML file (Three.js r128). Three operatives, ten stacking items,
+a Warden boss every five waves, a lobby with a practice range. Plays with keyboard + mouse, touch, or a gamepad.
+
+- `ferrous-arena.html` — open it, play. No install, no build.
+- `docs/` — the same game packaged as an installable PWA for GitHub Pages (touch controls, offline, home-screen icon).
+- `src/` + `build.js` — source and bundler. `node build.js` regenerates everything.
+- `HANDOFF.md` — code map and tuning surface. `ROADMAP.md` — what's done, what's next.
+
+## Publish to GitHub Pages (one-time)
+
+1. Create a **public** repository on GitHub, e.g. `ferrous-arena`.
+2. In this folder:
+   ```bash
+   git init
+   git add .
+   git commit -m "Ferrous Arena v2.2"
+   git branch -M main
+   git remote add origin https://github.com/<you>/ferrous-arena.git
+   git push -u origin main
+   ```
+3. On GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main`, Folder: `/docs` → Save.**
+4. After a minute the game is live at `https://<you>.github.io/ferrous-arena/`.
+
+## Install on a phone
+
+- **Android (Chrome):** open the URL → ⋮ menu → **Add to Home screen** / **Install app**. It launches fullscreen in landscape and works offline.
+- **iPhone (Safari):** open the URL → Share → **Add to Home Screen**.
+
+Every later `node build.js` + `git push` updates the site; the service worker picks up the new version on the next launch.
+
+## Develop
+
+```bash
+npm install three@0.128.0 playwright --no-audit --no-fund   # once
+node build.js
+node test.js && node test2.js && node test3.js               # headless checks (desktop flow, aimed fire, touch)
+```
+Press ` in game for the performance overlay. Append `?touch=1` to the URL to force touch controls on a desktop, `?touch=0` to force them off.

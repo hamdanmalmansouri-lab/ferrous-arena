@@ -1,0 +1,74 @@
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div id="hud" data-mode="run">
+    <div id="cross"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmark"><b></b><b></b><b></b><b></b></div>
+    <div id="dmg"></div>
+    <div id="lowvig"></div>
+    <div id="feed"></div>
+
+    <div class="panel" id="topbar">
+      <div><div class="k">Wave</div><div class="v acc" id="uiWave">1</div></div>
+      <div><div class="k">Hostiles</div><div class="v" id="uiLeft">0</div></div>
+      <div><div class="k">Score</div><div class="v" id="uiScore">0</div></div>
+      <div><div class="k">Next boss</div><div class="v" id="uiBossIn">5</div></div>
+    </div>
+
+    <div class="panel" id="bossbar">
+      <div class="n"><span id="bossName">Warden</span><span id="bossHp">100%</span></div>
+      <div class="bar"><div class="fill" id="bossFill"></div></div>
+    </div>
+
+    <div class="panel" id="range">
+      <div class="k">Practice range</div>
+      <div class="row"><div><div class="k">DPS</div><div class="v" id="rgDps">0</div></div>
+      <div><div class="k">Hits</div><div class="v" id="rgHits">0</div></div>
+      <div><div class="k">Targets</div><div class="v" id="rgTargets">0</div></div></div>
+    </div>
+
+    <div class="panel" id="lobbytag">
+      <div class="k">Operative</div><div class="v" id="lbChar">Vanguard</div>
+      <div class="h"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> swap &nbsp; <kbd>Tab</kbd> roster</div>
+    </div>
+
+    <div class="panel" id="vitals">
+      <div class="lbl"><span>Integrity</span><b id="uiChar">Vanguard</b></div>
+      <div id="hpbar"><div id="hpfill"></div><div id="shfill"></div></div>
+      <div id="hpnum"><span>Kills <b id="uiKills">0</b></span><span><b id="uiHp">100</b> / <span id="uiMaxHp">100</span></span></div>
+    </div>
+
+    <div class="panel" id="items"></div>
+
+    <div class="panel" id="ability">
+      <div class="key" id="abKey"><i id="abFill"></i><span>Q</span></div>
+      <div><div class="n" id="abName">Overdrive</div><div class="d" id="abState">Ready</div></div>
+    </div>
+
+    <div class="panel" id="ammo">
+      <div class="big" id="uiMag">30</div>
+      <div class="sub" id="uiAmmoLbl">30 / 30 mag</div>
+      <div id="reloadbar"><div id="reloadfill"></div></div>
+    </div>
+
+    <div id="prompt"><kbd>E</kbd><span id="promptTxt"></span></div>
+    <div id="banner"><div class="t" id="bnT">Wave 1</div><div class="s" id="bnS">Incoming</div></div>
+  </div>
+
+  <div id="screen">
+    <div class="card" id="card"></div>
+  </div>
+  <div id="touch">
+    <div class="zone" id="zoneL"></div>
+    <div class="zone" id="zoneR"></div>
+    <div id="stick"><i></i></div>
+    <div class="tbtn" id="tFire">FIRE</div>
+    <div class="tbtn" id="tAbil"><i></i><span id="tAbilTxt">Q<small>ability</small></span></div>
+    <div class="tbtn" id="tJump">JUMP</div>
+    <div class="tbtn" id="tReload">R<small>reload</small></div>
+    <div class="tbtn" id="tInteract"><span id="tInteractTxt">Interact</span></div>
+    <div class="tbtn" id="tPause">&#9646;&#9646;</div>
+  </div>
+  <div id="rotate"><b>Rotate your device</b>Ferrous Arena plays in landscape.</div>
+  <div id="dbg"><span id="dbgTxt"></span><canvas id="dbgC" width="180" height="36"></canvas></div>
+</div>
