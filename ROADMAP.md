@@ -1,6 +1,6 @@
 # Ferrous Arena — Roadmap
 
-Working doc for the game. Read alongside `HANDOFF.md` (code map, tuning surface, test harnesses).
+Phase history for the game. **Open work now lives in `MASTER-ROADMAP.md`** (tagged tasks per sector, one per session). Read alongside `HANDOFF.md` (code map, tuning surface, test harnesses).
 Each phase lists its goal, the concrete tasks, and the acceptance bar that closes it. Phases are ordered by
 value-per-effort, but 1 (performance budget) is a hard prerequisite for 2 (mobile) — do not reorder those.
 

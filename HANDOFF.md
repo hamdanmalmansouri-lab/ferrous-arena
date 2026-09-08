@@ -162,7 +162,8 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 | `test.js` … `test6.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages · models/settings/death anim · animation layers/recoil/flinch/shake/LOD/pod emote). All wait for `MODELS.ready`. |
 | `tools/pack-quaternius.js`, `tools/retarget.js`, `ATTRIBUTION.md` | asset packer (needs `Assets/` with the Quaternius packs; `npm i @gltf-transform/core @gltf-transform/extensions @gltf-transform/functions sharp gl-matrix`) and licences. `tools/pack-assets.js` is the retired Kenney packer. |
 | `README.md` | Player-facing readme + GitHub Pages / install steps. |
-| `ROADMAP.md` | Phased plan; tick items there as they ship. |
+| `ROADMAP.md` | Phase history; tick items there as they ship. |
+| `MASTER-ROADMAP.md` | **The backlog**: tagged tasks per sector (GP / MAP / ANIM / SFX / ART / UI / PERF / MOB / TOOL) with size, files touched and acceptance, plus the parallel-session protocol. |
 
 ### Build rule
 Never hand-edit the generated HTML. `node build.js` after any change in `src/` or `site/`, run the tests, then republish
