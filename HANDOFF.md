@@ -66,7 +66,8 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
   (Sci-Fi Guns pack; each gun's `Main` accent material is tinted to the operative colour, outfits keep their own palette); Rusher and dummy = Leela
   (Animated Mech Pack, red / grey); Lancer = Sci-Fi Kit EyeDrone (hovers at `HOVER_Y` 1.25 m, purple glow); Warden = QuadShell (gold glow, `size` 2.3);
   crate = Prop_Crate, repair kit = Prop_HealthPack, item module = Prop_Ammo_Small. Range targets are procedural plates.
-- `tools/pack-quaternius.js <Assets dir>` (gltf-transform + sharp) reads the packs from `Assets/` (not in git), keeps only the clips in each model's
+- `tools/fetch-quaternius.js` downloads the six packs into `Assets/` (not in git, ~310 MB: four public Google Drive folders + two free itch.io zips, ~5 min).
+- `tools/pack-quaternius.js <Assets dir>` (gltf-transform + sharp) reads the packs from `Assets/`, keeps only the clips in each model's
   clip map **renamed to one vocabulary — `idle walk run shoot jump die hit attack charge emote`** — strips the PBR texture set, resamples + quantizes,
   stores the pre-quantization bounds (`raw.h/minY/min/max/size`, needed because skinned quantized meshes bake the dequantize transform into their
   bind matrices), the target `height`, and for guns the detected **barrel axis** (`raw.barrel = {axis,sign}`: the thin end of the long axis), and writes
@@ -221,7 +222,8 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 cdnjs is blocked from the sandbox egress, so test through `test-local.html`.
 
 ```bash
-npm install three@0.128.0 playwright --no-audit --no-fund
+npm install --no-audit --no-fund          # package.json pins three 0.128, playwright, gltf-transform, sharp, gl-matrix
+node tools/fetch-quaternius.js            # once per machine: the packs into Assets/ (only needed to repack)
 node build.js
 node test.js    # menu, lobby E/1-2-3 select, range portal, blink, run, all 10 items, wave 5 boss, boss loot, draw-call count, death
 node test2.js   # aimed fire on the range, chaser damage, barrier, wave clear -> crate -> pickup -> next wave

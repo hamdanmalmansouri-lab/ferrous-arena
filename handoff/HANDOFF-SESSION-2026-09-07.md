@@ -41,9 +41,8 @@ Men + Women, Sci-Fi Guns.
    the alive cap (16), touch feel. Roadmap phases 1 and 2 still have "needs a phone" acceptance items.
 2. **Desktop feel pass** (human decides): jump take-off timing (`airT<0.32`, 2.4× rate), landing recovery 0.55 s, shake amplitudes, Warden size 2.3,
    gun grip offsets (`MOUNTS[id].pos` in `20-player.js` if a grip floats).
-3. **Reload animation** — `Pistol_Reload` exists in the UAL; add `Pistol_Reload:'reload'` to `UAL_CLIPS` in the packer, repack, and play it as an
-   upper-body layer while `player.reloading>0` (the retargeter is generic; the human rig's arms are two-hand-free so it will look pistol-ish).
-   Other UAL candidates: `Hit_Chest/Hit_Head` (better than the native HitRecieve), `Crouch_*`, `Death01` (2nd death variant), `Roll`.
+3. ~~**Reload animation**~~ — shipped in v2.7.1 (8 Sep): `Pistol_Reload` retargeted, upper-body layer while `player.reloading>0`, `test6.js` covers it;
+   `tools/fetch-quaternius.js` now downloads the packs so any machine can repack. Other UAL candidates: `Hit_Chest/Hit_Head` (better than the native HitRecieve), `Crouch_*`, `Death01` (2nd death variant), `Roll`.
 4. **Enemies from richer rigs** — Sci-Fi Kit `Trilobite` (has `Gun.L`, `AttackAuto`) is unpacked: natural elite / second Lancer. Roadmap §6 elites.
 5. **Performance headroom** — mechs/humans are 7–10k tris; `gltf-transform simplify` (meshopt) on guns and a smaller far-LOD are the cheap levers
    before raising the alive cap; profile on a phone first.
