@@ -37,8 +37,9 @@ function tryFire(){
     let endPoint=origin.clone().add(dir.clone().multiplyScalar(120));
     if(hits.length){
       const h=hits[0]; endPoint=h.point.clone();
-      const e=h.object.userData.enemy, tg=h.object.userData.target;
-      if(e&&!e.dead){
+      const e=h.object.userData.enemy, tg=h.object.userData.target, bar=h.object.userData.barrel;
+      if(bar){ anyHit=true; explodeBarrel(bar); }
+      else if(e&&!e.dead){
         anyHit=true;
         const head=h.object.userData.head, crit=Math.random()<s.crit;
         const dmg=s.dmg*(head?s.headMult:1)*(crit?2:1)*(od?1.2:1);

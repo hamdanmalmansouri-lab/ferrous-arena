@@ -33,6 +33,7 @@ function spawnOne(){
   state.spawnQueue--;
 }
 function waveCleared(){
+  respawnBarrels();
   const bonus=250+state.wave*60;
   state.score+=bonus;
   say('Wave '+state.wave+' cleared <b>+'+bonus+'</b>');

@@ -4,6 +4,8 @@
 const mapData={ice:[],pulse:null,spawnRing:0};
 function setTheme(fog,far){ scene.fog.color.set(fog); scene.background.set(fog); scene.fog.far=Math.min(far,Q.cfg.fog+20); }
 function resetMapData(){ mapData.ice.length=0; mapData.pulse=null; mapData.spawnRing=0; }
+/* set dressing helper: [id,x,z,rotDeg,height,solid,y] rows; explosive barrels as [x,z] pairs. Skipped when the models failed to parse. */
+function dress(props,barrelsAt){ if(!MODELS.ok)return; props.forEach(p=>addProp(p[0],p[1],p[2],p[3],p[4],p[5]!==false,p[6]||0)); (barrelsAt||[]).forEach(b=>addBarrel(b[0],b[1])); }
 
 /* ---- 1. Foundry — the original arena, retuned warm ---- */
 function buildFoundry(){
@@ -23,6 +25,13 @@ function buildFoundry(){
     const ring=new THREE.Mesh(new THREE.BoxGeometry(2.35,.16,2.35),basicMat(0xff8a3d)); ring.position.set(p[0],4.2,p[2]); world.add(ring);
     const gl=glowSprite(0xff8a3d,5); gl.position.set(p[0],4.3,p[2]); world.add(gl);
   });
+  /* stores along the walls, fuel barrels by the cover, a locker row at the spawn side */
+  dress([['crate_large',-30,-4,90,1.4],['crate_large',30,4,90,1.4],['crate_large',-4,-30.5,0,1.4],['crate_large',4,30.5,0,1.4],['crate_large',29.5,-16,90,1.4],
+    ['crate_tarp',-27,29,15,1.5],['crate_tarp',27,-29,-20,1.5],['shelves',-31.6,20,90,2.3],['shelves',31.6,-20,-90,2.3],
+    ['locker',-3.3,32.5,0,2.3],['locker',-2.2,32.5,0,2.3],['locker',-1.1,32.5,0,2.3],['locker',1.1,32.5,0,2.3],['locker',2.2,32.5,0,2.3],['locker',3.3,32.5,0,2.3],
+    ['barrel2',2.4,9.8,0,.8],['barrel2',-2.8,-9.6,30,.8],['barrel2',14.8,16,0,.8],['barrel2',-14.8,-16.2,50,.8],['barrel2',-21.6,-3,0,.8],['barrel2',21.7,3.2,0,.8],
+    ['desk',-24,-30,0,.9],['crate_tarp',24,30,180,1.5]],
+    [[7,12],[-7,-12],[17.5,5],[-17.5,-5],[11,-19],[-11,19],[25,21],[-25,-21]]);
   setTheme(0x0b0806,64);
   finalizeWorld();
 }
@@ -45,6 +54,12 @@ function buildRelay(){
    [0,0,10,2.4,1.0,2.4],[0,0,-10,2.4,1.0,2.4],[-8,0,26,4,2.2,1.4],[8,0,-26,4,2.2,1.4]].forEach((c,i)=>addBlock(c[0],c[1],c[2],c[3],c[4],c[5],i%2?0x33404f:0x2c3745));
   [[28,0,0],[-28,0,0]].forEach(p=>{ addBlock(p[0],0,p[2],2,4.6,2,0x2a3442);
     const gl=glowSprite(0x4ea8ff,5); gl.position.set(p[0],4.4,p[2]); world.add(gl); });
+  /* relay dishes and consoles on the platform tops, stores at the wall bays */
+  dress([['dish',-16,-2.6,0,4.6,true,3],['dish',16,-2.6,180,4.6,true,3],['desk',-16,2.8,180,.9,true,3],['desk',16,2.8,0,.9,true,3],
+    ['locker',-32.5,-8,90,2.3],['locker',-32.5,-6.9,90,2.3],['locker',-32.5,-5.8,90,2.3],['locker',32.5,8,-90,2.3],['locker',32.5,6.9,-90,2.3],['locker',32.5,5.8,-90,2.3],
+    ['crate_large',-8,31,0,1.4],['crate_large',8,-31,0,1.4],['crate_tarp',26,26,30,1.5],['crate_tarp',-26,-26,-30,1.5],['crate_tarp',0,-30,0,1.5],
+    ['barrel2',-14,12.6,0,.8],['barrel2',13.2,-12.6,20,.8],['barrel2',22.2,-2.6,0,.8],['barrel2',-22.2,2.6,0,.8]],
+    [[0,14],[0,-14],[22,10],[-22,-10],[10,-24],[-10,24]]);
   setTheme(0x070b12,64);
   finalizeWorld();
 }
@@ -65,6 +80,11 @@ function buildFrost(){
     rim.rotation.x=-Math.PI/2; rim.position.set(c[0],0.03,c[1]); world.add(rim);
     mapData.ice.push({x:c[0],z:c[1],r:c[2]});
   });
+  /* the array: dish clusters in the fog, tarped supply drops, fuel on the paths */
+  dress([['dish',28,-14,20,5.2],['dish',-28,14,200,5.2],['dish',12,29,0,5.2],['dish',-12,-29,180,5.2],['dish',31,30,45,4.6],['dish',-31,-30,225,4.6],
+    ['crate_tarp',8,-9,10,1.5],['crate_tarp',-8,9,-10,1.5],['crate_tarp',24,-25,0,1.5],['crate_large',-30,0,90,1.4],['crate_large',30,0,90,1.4],['crate_tarp',0,-31,0,1.5],
+    ['barrel2',20.5,13,0,.8],['barrel2',-20.5,-13,0,.8],['barrel2',5.2,-15.2,0,.8]],
+    [[18,2],[-18,-2],[2,-18],[-2,18],[27,20],[-27,-20]]);
   setTheme(0x0c141c,40);
   finalizeWorld();
 }
@@ -88,6 +108,11 @@ function buildReactor(){
   [[20,0],[-20,0],[0,20],[0,-20]].forEach(p=>{ addBlock(p[0],0,p[1],3,1.6,3,0x35283f); const gl=glowSprite(0x9b4dff,4); gl.position.set(p[0],2.2,p[1]); world.add(gl); });
   [[24,24],[-24,24],[24,-24],[-24,-24]].forEach(p=>addBlock(p[0],0,p[1],2.4,2.2,2.4,0x2c2436));
   mapData.pulse={t:16,period:20,ring:ring,glow:coreGlow,r:0,active:false,hit:false,warned:false};
+  /* control stations at the tier corners, lockers along the walls, coolant barrels on the walkways */
+  dress([['desk',12,14.5,180,.9,true,.3],['desk',-12,-14.5,0,.9,true,.3],['locker',-28.6,4,90,2.3],['locker',-28.6,5.1,90,2.3],['locker',-28.6,6.2,90,2.3],['locker',28.6,-4,-90,2.3],['locker',28.6,-5.1,-90,2.3],['locker',28.6,-6.2,-90,2.3],
+    ['crate_tarp',0,-27.5,0,1.5],['crate_large',-8,28.5,0,1.4],['crate_tarp',27,27,0,1.5],['shelves',-27.5,-27,45,2.3],
+    ['barrel2',14.2,-14.2,0,.8,true,.3],['barrel2',-14.2,14.2,0,.8,true,.3],['barrel2',22.5,2.5,0,.8,true,.6]],
+    [[16,5],[-16,-5],[5,-16],[-5,16],[24,-9],[-24,9]]);
   setTheme(0x0a0710,56);
   finalizeWorld();
 }

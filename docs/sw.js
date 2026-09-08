@@ -1,5 +1,5 @@
 /* Ferrous Arena service worker — precache the game so it runs offline once installed. */
-const VERSION='84034d4c48';
+const VERSION='0084778884';
 const CACHE='ferrous-'+VERSION;
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 const THREE_CDN='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';

@@ -114,6 +114,7 @@ function update(dt){
 
   /* ---- world spinners / targets ---- */
   spinners.forEach(sp=>{ sp.obj.rotation.y+=sp.speed*dt; });
+  for(const b of barrels)if(b.spawnT>0){ b.spawnT-=dt; b.g.scale.setScalar(Math.min(1,1-b.spawnT/.5)+.01); }
   for(const tg of targets){
     if(tg.down>0){ tg.down-=dt; tg.plate.rotation.x=Math.min(Math.PI/2,tg.plate.rotation.x+dt*7); if(tg.down<=0)tg.plate.rotation.x=0; }
     if(tg.moving)tg.g.position.x=tg.x0+Math.sin(state.t*1.1+tg.ph)*4;

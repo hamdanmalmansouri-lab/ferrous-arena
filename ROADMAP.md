@@ -196,6 +196,16 @@ Known gaps carried forward: no store wrappers; phone load time / frame rate unme
 
 ---
 
+## 5b. Map texture and things to do (v2.8, in progress)
+
+**Goal:** every map reads as a place and gives the player something to use, not just cover to hide behind.
+
+- [x] **Props pipeline (v2.8.0):** ten Sci-Fi Essentials Kit props packed with their trim-sheet textures; `addProp` merges them into the per-sheet world meshes with optional collision; lobby, range and all four run maps dressed (lockers, shelves, desks, dishes, crate stacks, drums).
+- [x] **Explosive barrels (v2.8.0):** 6–8 per map, chain-react, hurt the player too, respawn on wave clear. First "thing to do" beyond shooting robots.
+- [ ] **Per-map mechanic:** Foundry steam vents on a cycle (block LOS, scorch); Relay jump pads to the platform tops + a console that calls a 20 s sentry; Frost supply beacon (hold the ring 6 s mid-wave for an item); Reactor coolant panels that shorten the pulse timer when shot.
+- [ ] **Density pass:** floor decals / grime, pipes and cable trays along the walls (kit trim sheets), emissive screens on desks, hanging lights; a second prop layer per map once the phone frame rate is known (props are 2–4k tris each).
+- [ ] **Ambient motion:** dish rotation, vent steam sprites, flickering panel lights; hurt-state smoke on damaged barrels.
+
 ## 6. Later / nice-to-have
 
 - [ ] Music: procedural WebAudio loop that intensifies with wave number and on boss spawn; separate music/SFX sliders.

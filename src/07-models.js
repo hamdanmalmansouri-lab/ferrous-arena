@@ -12,18 +12,18 @@ function loadModels(onProgress){
     const loadTex=(pack,key,src,srgb)=>texPromises.push(new Promise(res=>{
       const img=new Image(); img.onload=()=>{ const t=new THREE.Texture(img); t.flipY=false; if(srgb)t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.needsUpdate=true; (MODELS.textures[pack]=MODELS.textures[pack]||{})[key]=t; res(); };
       img.onerror=()=>res(); img.src=src; }));
-    for(const pack in ASSET_DATA.maps){ const m=ASSET_DATA.maps[pack]; if(m.map)loadTex(pack,'map',m.map,true); if(m.emissive)loadTex(pack,'emissive',m.emissive,true); }
+    for(const key in ASSET_DATA.maps){ const m=ASSET_DATA.maps[key]; if(m.map)loadTex(key,'map',m.map,true); if(m.emissive)loadTex(key,'emissive',m.emissive,true); }   // keyed by base-colour file (materials name theirs in extras.packmap)
     Promise.all(texPromises).then(()=>{
       const loader=new THREE.GLTFLoader(); const ids=Object.keys(ASSET_DATA.models); let done=0;
       const next=()=>{
         if(done>=ids.length){ MODELS.ready=true; MODELS.ok=Object.keys(MODELS.items).length>0; MODELS.clips=(MODELS.items.human_swat||{animations:[]}).animations; resolve(MODELS.ok); return; }
         const id=ids[done], rec=ASSET_DATA.models[id];
         loader.parse(b64ToBuf(rec.b64),'',gltf=>{
-          const root=gltf.scene; const tex=MODELS.textures[rec.pack]||{};
+          const root=gltf.scene; let textured=false;
           root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=false; o.frustumCulled=false;
-            const m=o.material; if(m){ if(m.userData&&m.userData.packmap&&tex.map){ m.map=tex.map; if(tex.emissive){ m.emissiveMap=tex.emissive; m.emissive.set(0xffffff); } }
+            const m=o.material; if(m){ const tex=(m.userData&&MODELS.textures[m.userData.packmap])||{}; if(tex.map){ textured=true; m.map=tex.map; if(tex.emissive){ m.emissiveMap=tex.emissive; m.emissive.set(0xffffff); } }
               m.roughness=0.8; m.metalness=0.15; m.needsUpdate=true; } } });
-          MODELS.items[id]={root:root,animations:gltf.animations||[],pack:rec.pack,height:rec.height||0,raw:rec.raw||null,textured:!!tex.map};
+          MODELS.items[id]={root:root,animations:gltf.animations||[],pack:rec.pack,height:rec.height||0,raw:rec.raw||null,textured:textured};
           done++; if(onProgress)onProgress(done/ids.length); setTimeout(next,0);
         },err=>{ MODELS.error=err&&err.message||String(err); done++; setTimeout(next,0); });
       };

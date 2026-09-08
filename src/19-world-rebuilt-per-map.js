@@ -8,6 +8,9 @@ const spinners=[];               // {obj,speed}
 const targets=[];                // practice-range targets
 let targetHitMeshes=[];
 
+/* attribute read that honours KHR_mesh_quantization storage (normalized ints; r128's getX() does not denormalize) and interleaved buffers (gltf-transform interleaves vertex data) */
+function attrAt(a,i,k){ const A=a.isInterleavedBufferAttribute?a.data.array:a.array; const v=a.isInterleavedBufferAttribute?A[i*a.data.stride+a.offset+k]:A[i*a.itemSize+k]; if(!a.normalized)return v;
+  return A instanceof Int8Array?Math.max(v/127,-1):A instanceof Uint8Array?v/255:A instanceof Int16Array?Math.max(v/32767,-1):A instanceof Uint16Array?v/65535:v; }
 /* merge a list of {geo, matrix} into one indexed BufferGeometry (position/normal/uv) */
 function mergeGeos(parts){
   let vc=0, ic=0;
@@ -18,11 +21,11 @@ function mergeGeos(parts){
   for(const p of parts){
     const g=p.geo, m=p.matrix, n=g.attributes.position.count;
     nm.getNormalMatrix(m);
-    const P=g.attributes.position.array, N=g.attributes.normal.array, U=g.attributes.uv?g.attributes.uv.array:null;
+    const P=g.attributes.position, N=g.attributes.normal, U=g.attributes.uv||null;
     for(let i=0;i<n;i++){
-      v.set(P[i*3],P[i*3+1],P[i*3+2]).applyMatrix4(m); pos[(vo+i)*3]=v.x; pos[(vo+i)*3+1]=v.y; pos[(vo+i)*3+2]=v.z;
-      v.set(N[i*3],N[i*3+1],N[i*3+2]).applyMatrix3(nm).normalize(); nor[(vo+i)*3]=v.x; nor[(vo+i)*3+1]=v.y; nor[(vo+i)*3+2]=v.z;
-      if(U){ uv[(vo+i)*2]=U[i*2]; uv[(vo+i)*2+1]=U[i*2+1]; }
+      v.set(attrAt(P,i,0),attrAt(P,i,1),attrAt(P,i,2)).applyMatrix4(m); pos[(vo+i)*3]=v.x; pos[(vo+i)*3+1]=v.y; pos[(vo+i)*3+2]=v.z;
+      v.set(attrAt(N,i,0),attrAt(N,i,1),attrAt(N,i,2)).applyMatrix3(nm).normalize(); nor[(vo+i)*3]=v.x; nor[(vo+i)*3+1]=v.y; nor[(vo+i)*3+2]=v.z;
+      if(U){ uv[(vo+i)*2]=attrAt(U,i,0); uv[(vo+i)*2+1]=attrAt(U,i,1); }
     }
     if(g.index){ const I=g.index.array; for(let i=0;i<I.length;i++)idx[io+i]=I[i]+vo; io+=I.length; }
     else { for(let i=0;i<n;i++)idx[io+i]=vo+i; io+=n; }
@@ -50,16 +53,68 @@ function addBlock(x,y,z,w,h,d,color,rough){
   boxes.push({min:new THREE.Vector3(x-w/2,y,z-d/2),max:new THREE.Vector3(x+w/2,y+h,z+d/2)});
   return null;
 }
-/* one mesh per material for everything queued by addBlock() */
+/* ---- kit props as set dressing: merged into one mesh per texture sheet (no per-prop draw calls), optional collision ----
+   addProp(id, x, z, rotDeg, height, solid, y): scaled so the model's raw height hits `height`, feet at y (default 0). */
+let pendingProps={};                    // material key -> {mat, parts}
+const PROP_MATS={};
+const _pm=new THREE.Matrix4(), _pq=new THREE.Quaternion();
+function addProp(id,x,z,rotDeg,height,solid,y){
+  const rec=MODELS.items[id]; if(!rec||!rec.raw)return null;
+  const raw=rec.raw, s=height/raw.h, y0=y||0, rot=(rotDeg||0)*Math.PI/180;
+  const base=new THREE.Matrix4().compose(new THREE.Vector3(x,y0-raw.minY*s,z),_pq.setFromAxisAngle(UP,rot),new THREE.Vector3(s,s,s));
+  rec.root.updateMatrixWorld(true);
+  rec.root.traverse(o=>{ if(!o.isMesh||!o.geometry.attributes.normal)return;
+    const m=o.material, key=(m.map?m.map.uuid:'flat:'+m.color.getHex())+(m.emissiveMap?'+e':'');
+    if(!PROP_MATS[key]){ const pm=new THREE.MeshStandardMaterial({map:m.map||null,color:m.map?0xffffff:m.color.getHex(),roughness:.8,metalness:.15});
+      if(m.emissiveMap){ pm.emissiveMap=m.emissiveMap; pm.emissive.set(0xffffff); } PROP_MATS[key]=pm; }
+    (pendingProps[key]||(pendingProps[key]={mat:PROP_MATS[key],parts:[]})).parts.push({geo:o.geometry,matrix:_pm.copy(base).multiply(o.matrixWorld).clone()}); });
+  if(solid){ /* AABB of the rotated raw box */
+    const c=Math.abs(Math.cos(rot)), sn=Math.abs(Math.sin(rot)); const hx=(raw.size[0]*c+raw.size[2]*sn)/2*s, hz=(raw.size[0]*sn+raw.size[2]*c)/2*s;
+    const mx=(raw.min[0]+raw.max[0])/2*s, mz=(raw.min[2]+raw.max[2])/2*s;
+    const cx=x+mx*Math.cos(rot)+mz*Math.sin(rot), cz=z-mx*Math.sin(rot)+mz*Math.cos(rot);
+    boxes.push({min:new THREE.Vector3(cx-hx,y0,cz-hz),max:new THREE.Vector3(cx+hx,y0+height,cz+hz)}); }
+  return {x:x,z:z,h:height};
+}
+/* one mesh per material for everything queued by addBlock() / addProp() */
 function finalizeWorld(){
   for(const key in pendingBlocks){
     const [color,r]=key.split('|');
     const m=new THREE.Mesh(mergeGeos(pendingBlocks[key]),stdMat(parseInt(color),parseFloat(r),.18));
     m.castShadow=true; m.receiveShadow=true; world.add(m); colliderMeshes.push(m);
   }
-  pendingBlocks={};
+  for(const key in pendingProps){ const p=pendingProps[key]; const m=new THREE.Mesh(mergeGeos(p.parts),p.mat);
+    m.castShadow=true; m.receiveShadow=true; world.add(m); colliderMeshes.push(m); }
+  pendingBlocks={}; pendingProps={};
   navBuild();
 }
+/* ---- explosive barrels: shoot one to blow it (AoE on enemies and the player, chains to neighbours); rebuilt on wave clear ---- */
+const barrels=[];
+function addBarrel(x,z){
+  const m=MODELS.ok?spawnProp('barrel1'):null; const g=new THREE.Group();
+  let h=1.1, r=.4;
+  if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=h/sz.y; m.scale.setScalar(k); m.position.y=-b.min.y*k; r=Math.max(sz.x,sz.z)*k/2; g.add(m); }
+  else { const c=new THREE.Mesh(new THREE.CylinderGeometry(.4,.4,h,12),stdMat(0x7a2a1e,.6,.3)); c.position.y=h/2; c.castShadow=true; g.add(c); }
+  const gl=glowSprite(0xff5a4d,1.8); gl.position.y=h*.6; g.add(gl);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(r*2.2,h,r*2.2),MAT_HIDDEN); hit.position.y=h/2; g.add(hit);
+  g.position.set(x,0,z); world.add(g);
+  const box={min:new THREE.Vector3(x-r,0,z-r),max:new THREE.Vector3(x+r,h,z+r)}; boxes.push(box);
+  const b={x:x,z:z,g:g,hit:hit,box:box,dead:false,spawnT:0}; hit.userData.barrel=b; targetHitMeshes.push(hit); barrels.push(b); return b;
+}
+function explodeBarrel(b){
+  if(b.dead)return; b.dead=true;
+  const p=new THREE.Vector3(b.x,.7,b.z);
+  world.remove(b.g); const bi=boxes.indexOf(b.box); if(bi>=0)boxes.splice(bi,1); const hi=targetHitMeshes.indexOf(b.hit); if(hi>=0)targetHitMeshes.splice(hi,1);
+  spark(p,0xff8a3d,22); spark(p,0xffd166,10); spark(p,0x444444,8);
+  noise(.55,.7,140,.6); blip({type:'sawtooth',f0:160,f1:40,d:.35,v:.25});
+  const dp=Math.hypot(player.pos.x-b.x,player.pos.z-b.z); shakeCam(0.9,dp);
+  if(state.mode==='run'&&dp<3.4)hurtPlayer(Math.round(16+state.wave*0.5));
+  const dmg=70+state.wave*4; let n=0;
+  for(const e of enemies.slice()){ if(e.dead)continue; const d=Math.hypot(e.group.position.x-b.x,e.group.position.z-b.z); const R=4.8*e.size;
+    if(d<R){ dealDamage(e,dmg*(1-0.6*d/R),e.group.position.clone().setY(1),false,false); n++; } }
+  if(n)say('Barrel took out <b>'+n+'</b>','item');
+  for(const o of barrels)if(!o.dead&&Math.hypot(o.x-b.x,o.z-b.z)<3.6)explodeBarrel(o);   // chain reaction
+}
+function respawnBarrels(){ for(const b of barrels.slice())if(b.dead){ barrels.splice(barrels.indexOf(b),1); const nb=addBarrel(b.x,b.z); nb.g.scale.setScalar(.01); nb.spawnT=.5; } }
 function addFloor(half,color,gridColor){
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(half*2,half*2),
     new THREE.MeshStandardMaterial({color:color,roughness:.96,metalness:.04}));
@@ -97,7 +152,7 @@ function addPortal(x,z,color,label,action){
 }
 function clearWorld(){
   while(world.children.length){ const o=world.children.pop(); world.remove(o); if(colliderMeshes.indexOf(o)>=0&&o.geometry)o.geometry.dispose(); }
-  pendingBlocks={};
+  pendingBlocks={}; pendingProps={}; barrels.length=0;
   boxes.length=0; colliderMeshes.length=0; interactables.length=0; spinners.length=0;
   targets.length=0; targetHitMeshes=[];
   for(let i=enemies.length-1;i>=0;i--)removeEnemy(enemies[i]);
@@ -139,8 +194,10 @@ function buildLobby(){
   /* portals */
   addPortal(-11,3,0x3ddc84,'Shooting Range',()=>goRange());
   addPortal( 11,3,0x4ea8ff,'Deploy',()=>goRun());
-  /* decoration crates */
-  [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?0x33404f:0x2c3745));
+  /* set dressing: lockers and shelves along the side walls, a desk by the range portal, crates by the deploy portal */
+  if(MODELS.ok){ for(let i=0;i<4;i++){ addProp('locker',-15,-8+i*1.1,90,2.3,true); addProp('locker',15,-8+i*1.1,-90,2.3,true); }
+    addProp('shelves',-14.9,4,90,2.3,true); addProp('desk',-11,-4,0,.9,true); addProp('crate_large',12,-6,90,1.4,true); addProp('crate_tarp',13,10,20,1.5,true); addProp('crate_tarp',-8,12.5,160,1.4,true); addProp('barrel2',9,12.5,0,.8,true); addProp('barrel2',10,13.4,40,.8,true); }
+  else [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?0x33404f:0x2c3745));
   finalizeWorld(); updatePodRings();
 }
 function updatePodRings(emote){
@@ -171,8 +228,9 @@ function buildRange(){
   const plates=[[-9,-6],[-4.5,-10],[0,-14],[4.5,-10],[9,-6],[-12,-16],[12,-16]];
   plates.forEach(p=>addTarget(p[0],p[1],false));
   addTarget(-6,-18,true); addTarget(6,-18,true);
-  /* cover to practise peeking */
+  /* cover to practise peeking, barrels to practise blowing up */
   addBlock(-14,0,-2,2.2,2.2,2.2,0x33404f); addBlock(14,0,-2,2.2,2.2,2.2,0x33404f);
+  if(MODELS.ok){ addBarrel(-9,-11); addBarrel(9,-11); addProp('crate_large',-17,6,90,1.4,true); addProp('crate_large',17,6,90,1.4,true); addProp('shelves',-19.5,-8,90,2.3,true); addProp('desk',18,12,180,.9,true); addProp('barrel2',-16,14,0,.8,true); }
   addPortal(0,18,0xffc247,'Return to Lobby',()=>goLobby());
   /* dummies */
   for(let i=0;i<3;i++)spawnDummy();

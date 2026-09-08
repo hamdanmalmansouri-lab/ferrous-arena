@@ -101,6 +101,18 @@ const path = require('path');
   await page.waitForTimeout(300);
   r = await page.evaluate(() => ({ lod: __ARENA__.perf.animLod, enemies: __ARENA__.enemies.length }));
   console.log('animation lod (far):', JSON.stringify(r));
+  // explosive barrels: an enemy next to one dies when it is shot; the barrel comes back on wave clear
+  r = await page.evaluate(() => { const A = __ARENA__; const b = A.barrels[0]; const e = A.enemies[0]; e.group.position.set(b.x + 1.2, 0, b.z); const hp0 = e.hp;
+    A.explodeBarrel(b); return { barrels: A.barrels.length, dead: b.dead, hp0: +hp0.toFixed(0), hp1: +e.hp.toFixed(0), enemyDead: !!e.dead, hitMeshGone: A.state.mode === 'run' }; });
+  await page.evaluate(() => { __ARENA__.enemies.slice().forEach(e => __ARENA__.killEnemy ? null : null); });
+  const beforeRespawn = await page.evaluate(() => __ARENA__.barrels.filter(b => b.dead).length);
+  await page.evaluate(() => { __ARENA__.waveCleared(); });
+  await page.waitForTimeout(700);
+  r.deadBefore = beforeRespawn; r.deadAfterClear = await page.evaluate(() => __ARENA__.barrels.filter(b => b.dead).length);
+  r.scaleBack = await page.evaluate(() => +__ARENA__.barrels[__ARENA__.barrels.length - 1].g.scale.x.toFixed(2));
+  if (!r.dead || r.hp1 >= r.hp0) errors.push('BARREL did not damage the adjacent enemy: ' + JSON.stringify(r));
+  if (r.deadBefore < 1 || r.deadAfterClear !== 0) errors.push('BARREL did not respawn on wave clear: ' + JSON.stringify(r));
+  console.log('barrels:', JSON.stringify(r));
   await page.evaluate(() => { __ARENA__.state.shake = 1; });
   await page.waitForTimeout(500);
   r = await page.evaluate(() => ({ shakeAfter: +__ARENA__.state.shake.toFixed(2) }));

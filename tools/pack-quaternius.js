@@ -41,20 +41,43 @@ const PICK={
   gun_sniper: {file:path.join(GUNS,'Sniper_3.gltf'),  pack:'sfguns', gun:true},
   gun_cannon: {file:path.join(GUNS,'Grenade_2.gltf'), pack:'sfguns', gun:true},
   crate:      {file:path.join(KIT,'glTF','Prop_Crate.gltf'),      pack:'crates'},
+  /* set dressing (merged into the world by addProp) + explosive barrels */
+  barrel1:    {file:path.join(KIT,'glTF','Prop_Barrel1.gltf'),          pack:'props'},
+  barrel2:    {file:path.join(KIT,'glTF','Prop_Barrel2_Closed.gltf'),   pack:'props'},
+  crate_large:{file:path.join(KIT,'glTF','Prop_Crate_Large.gltf'),      pack:'props'},
+  crate_tarp: {file:path.join(KIT,'glTF','Prop_Crate_Tarp.gltf'),       pack:'props'},
+  locker:     {file:path.join(KIT,'glTF','Prop_Locker.gltf'),           pack:'props'},
+  shelves:    {file:path.join(KIT,'glTF','Prop_Shelves_WideTall.gltf'), pack:'props'},
+  dish:       {file:path.join(KIT,'glTF','Prop_SatelliteDish.gltf'),    pack:'props'},
+  desk:       {file:path.join(KIT,'glTF','Prop_Desk_Medium.gltf'),      pack:'props'},
   healthpack: {file:path.join(KIT,'glTF','Prop_HealthPack.gltf'), pack:'props2'},
   module:     {file:path.join(KIT,'glTF','Prop_Ammo_Small.gltf'), pack:'props2'}
 };
-const MAPS={ /* pack: [baseColor, emissive?, size] */
-  enemies:[path.join(KIT,'Textures','T_Enemies_BaseColor.png'),path.join(KIT,'Textures','T_Enemies_Emissive.png'),1024],
-  crates:[path.join(KIT,'Textures','T_Props_Crates_BaseColor.png'),null,512],
-  props2:[path.join(KIT,'Textures','T_Props_Batch2_BaseColor.png'),path.join(KIT,'Textures','T_Props_Batch2_Emissive.png'),512]
+/* texture sets, keyed by the base-colour file each material references (materials carry that key in extras.packmap):
+   [baseColor, emissive?, size] */
+const TX=n=>path.join(KIT,'Textures',n), TG=n=>path.join(KIT,'glTF',n);
+const MAPS={
+  T_Enemies_BaseColor:[TX('T_Enemies_BaseColor.png'),TX('T_Enemies_Emissive.png'),1024],
+  T_Props_Crates_BaseColor:[TX('T_Props_Crates_BaseColor.png'),null,512],
+  T_Props_Batch1_BaseColor:[TX('T_Props_Batch1_BaseColor.png'),null,512],
+  T_Props_Batch2_BaseColor:[TX('T_Props_Batch2_BaseColor.png'),TX('T_Props_Batch2_Emissive.png'),512],
+  T_Trim_01_BaseColor_Red:[TG('T_Trim_01_BaseColor_Red.png'),null,512],
+  T_Trim_02_BaseColor:[TG('T_Trim_02_BaseColor.png'),null,512],
+  T_Trim_02_BaseColor_Red:[TG('T_Trim_02_BaseColor_Red.png'),null,512],
+  T_Trim_03_BaseColor:[TG('T_Trim_03_BaseColor.png'),null,512],
+  T_Trim_03_Cables:[TG('T_Trim_03_Cables.png'),null,512]
 };
 
 /* read a .gltf whose textures may be missing: strip images/textures from the JSON first, load only the .bin */
 function loadDoc(io,file){
   const json=JSON.parse(fs.readFileSync(file,'utf8'));
+  (json.materials||[]).forEach(m=>{ const p=m.pbrMetallicRoughness||{};
+    const t=p.baseColorTexture&&json.textures&&json.textures[p.baseColorTexture.index]; const img=t&&json.images&&json.images[t.source];
+    const key=img?path.basename(img.uri).replace(/\.png$/i,'').replace(/_png$/,''):null;   // e.g. T_Props_Batch1_BaseColor
+    if(key&&!MAPS[key])console.warn('  no texture set packed for',key,'(material',m.name+')');
+    delete p.baseColorTexture; delete p.metallicRoughnessTexture; delete m.normalTexture; delete m.occlusionTexture; delete m.emissiveTexture;
+    m.extras=Object.assign(m.extras||{},{packmap:key&&MAPS[key]?key:false}); });
   delete json.images; delete json.textures; delete json.samplers;
-  (json.materials||[]).forEach(m=>{ const p=m.pbrMetallicRoughness||{}; delete p.baseColorTexture; delete p.metallicRoughnessTexture; delete m.normalTexture; delete m.occlusionTexture; delete m.emissiveTexture; m.extras=Object.assign(m.extras||{},{packmap:true}); });
   const resources={};
   (json.buffers||[]).forEach(b=>{ if(b.uri&&!b.uri.startsWith('data:'))resources[b.uri]=fs.readFileSync(path.join(path.dirname(file),b.uri)); });
   return io.readJSON({json:json,resources:resources});
@@ -91,7 +114,7 @@ function loadDoc(io,file){
        geometry box the game would measure is meaningless) */
     const scene=root.listScenes()[0]; const bb=getBounds(scene); const rawH=bb.max[1]-bb.min[1];
     /* flat mechs: materials keep their colour factors; kit models get the pack map back at load time */
-    await doc.transform(dedup(),weld(),resample({tolerance:2e-3}),quantize({quantizePosition:14,quantizeNormal:8,quantizeTexcoord:12,quantizeColor:8,quantizeGeneric:12}),dedup(),prune());
+    await doc.transform(dedup(),weld(),resample({tolerance:2e-3}),quantize({quantizePosition:14,quantizeNormal:8,quantizeTexcoord:12,quantizeColor:8,quantizeGeneric:12}),dedup(),prune({keepAttributes:true}));   // keepAttributes: the texture refs were stripped above, so TEXCOORD_0 looks unused — the game re-attaches the maps
     const glb=await io.writeBinary(doc);
     const buf=Buffer.from(glb.buffer,glb.byteOffset,glb.byteLength);
     out.models[id]={pack:rec.pack,b64:buf.toString('base64'),height:rec.height||0,raw:{h:+rawH.toFixed(4),minY:+bb.min[1].toFixed(4),min:bb.min.map(v=>+v.toFixed(4)),max:bb.max.map(v=>+v.toFixed(4)),size:bb.max.map((v,i)=>+(v-bb.min[i]).toFixed(4)),barrel:barrel}};

@@ -117,6 +117,19 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 - Lobby pods (`podDisplays[]`: ring, obj, anim, head) run `idle` through `tickPods(dt,eye)`, which also returns a finished one-shot to idle and turns each
   head bone toward `eye` (±0.9 rad, ignored when the viewer is behind). `updatePodRings(true)` plays the `jump` emote on the selected pod.
 
+### Set dressing and barrels (`19-world`, `19b-maps`)
+- **Kit props** (`barrel1/2, crate_large, crate_tarp, locker, shelves, dish, desk`, Sci-Fi Essentials Kit) are placed with `addProp(id,x,z,rotDeg,height,solid,y)`:
+  the model's meshes are transformed and queued per *texture sheet*, and `finalizeWorld()` merges them into one mesh per sheet next to the block
+  meshes, so a map's 20–30 props cost ~5 draw calls. `solid` pushes a rotated-AABB collision box (the nav bake then treats it as cover).
+  `mergeGeos()` reads attributes through `attrAt()` because packed geometry is quantized *and* interleaved (`InterleavedBufferAttribute`).
+  Map builders call `dress(rows, barrelPairs)`. Skinned props (the kit's animated Chest) can't be merged — leave them out.
+- **Texture sheets** are keyed by the base-colour file each material references (`extras.packmap`, set by the packer); `loadModels()` attaches
+  `MODELS.textures[key]` per material. The packer must run `prune({keepAttributes:true})` — without it the texcoords are dropped as unused and
+  every kit model renders black (that was the case up to v2.7.2).
+- **Explosive barrels** (`addBarrel(x,z)`, red glow, `targetHitMeshes` entry with `userData.barrel`): a hit calls `explodeBarrel()` → 70+4·wave
+  damage falling to 40 % at 4.8 m on enemies, 16+wave/2 on the player inside 3.4 m, chain reaction inside 3.6 m, camera shake, sparks.
+  `respawnBarrels()` rebuilds spent ones on every wave clear (0.5 s grow-in). Every run map has 6–8; the range has 2.
+
 ### Maps and stages (`19-world`, `19b-maps`)
 `clearWorld()` empties the `world` group and every registry, then a builder repopulates `boxes[]`, `colliderMeshes[]`,
 `interactables[]`, `spinners[]`, `targets[]`, `mapData` and ends with `finalizeWorld()` (geometry merge + **nav grid bake**).
