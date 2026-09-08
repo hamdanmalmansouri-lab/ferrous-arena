@@ -2,7 +2,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=swiftshader','--enable-unsafe-swiftshader','--no-sandbox'] });
+  const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM || (require('fs').existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined), args: ['--use-gl=swiftshader','--enable-unsafe-swiftshader','--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
@@ -51,6 +51,20 @@ const path = require('path');
   await page.waitForTimeout(120);
   r.hit = await page.evaluate(() => __ARENA__.avatarAnim().current);
   console.log('avatar layers:', JSON.stringify(r));
+  // reload: upper-body 'reload' layer over the locomotion half while player.reloading>0 (clip comes from the UAL repack; reported as absent otherwise)
+  // without the packed clip (Assets/ not on this machine), shim one from a renamed clone of `hit` so the layer logic is still exercised
+  const shim = await page.evaluate(() => { const A = __ARENA__; if (A.avatarAnim().actions.reload) return false; const rec = A.MODELS.items.human_swat; const c = rec.animations.find(x => x.name === 'hit').clone(); c.name = 'reload'; rec.animations.push(c); A.selectChar(0); return true; });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => { const A = __ARENA__; A.player.hitT = 0; A.player.mag = 0; A.keys.w = true; A.keys.mouse = true; });
+  await page.waitForTimeout(200);
+  r = await page.evaluate(() => { const A = __ARENA__, an = A.avatarAnim(); return { hasClip: !!an.actions.reload, reloading: +A.player.reloading.toFixed(2), state: an.current, once: an.once }; }); r.shim = shim;
+  await page.evaluate(() => { __ARENA__.keys.w = false; __ARENA__.keys.mouse = false; });
+  await page.waitForTimeout(3500);   // reloadT is ≤ 2.6 s; headless sim runs ~0.13 s per frame
+  r.after = await page.evaluate(() => ({ reloading: +__ARENA__.player.reloading.toFixed(2), state: __ARENA__.avatarAnim().current }));
+  if (r.hasClip && !/\|reload$/.test(r.state)) errors.push('RELOAD layer not active while reloading: ' + r.state);
+  if (r.hasClip && /reload/.test(r.after.state)) errors.push('RELOAD layer still active after the reload: ' + r.after.state);
+  if (shim) r.note = 'packed reload clip absent - layer verified with a shim; repack with Pistol_Reload in UAL_CLIPS';
+  console.log('reload layer:', JSON.stringify(r));
   // enemies: rusher attack layered over sprint, hit flinch, shake on hurt, LOD for far enemies
   await page.evaluate(() => { const A = __ARENA__; A.state.startDelay = 0.01; });
   await page.waitForTimeout(1500);

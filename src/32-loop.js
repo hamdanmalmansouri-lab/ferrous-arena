@@ -55,7 +55,8 @@ function update(dt){
   player.hitT=Math.max(0,player.hitT-dt); player.rollT=Math.max(0,player.rollT-dt); player.aimT=Math.max(0,player.aimT-dt); player.landT=Math.max(0,player.landT-dt);
   if(avatarAnim){
     avatarAnim.update(dt);
-    const firing=inp.fire||player.fireCd>0.02||(inp._auto&&touch.autoFire);
+    const reloadAct=player.reloading>0?avatarAnim.actions.reload:null;                       // UAL Pistol_Reload retargeted onto the rig (absent until repacked)
+    const firing=!reloadAct&&(inp.fire||player.fireCd>0.02||(inp._auto&&touch.autoFire));
     const sprinting=inp.sprint&&inp.f>0.5;
     /* locomotion clip from the body-relative move vector: strafes and back-pedal have their own clips */
     const lat=Math.abs(inp.r)>Math.abs(inp.f)*1.2;
@@ -64,6 +65,7 @@ function update(dt){
     if(player.rollT>0)avatarAnim.play('roll',0.06,true,1.4);                                   // Blink
     else if(!player.grounded&&avatarAnim.actions.jumploop){ if(player.airT<0.32&&player.vel.y>0)avatarAnim.play('jumpstart',0.05,true,2.4); else avatarAnim.play('jumploop',0.15,false,1); }   // UAL jump: take-off, then the airborne loop
     else if(!player.grounded)avatarAnim.layer(null,'aim',0.12,false,1,0.02);                   // rigs without a jump clip: legs at rest, gun up
+    else if(reloadAct)avatarAnim.layer(loco,'reload',0.08,true,tsLo,reloadAct.getClip().duration/Math.max(0.3,s.reloadT));   // reload on the upper body, stretched to the reload time; legs keep moving
     else if(player.landT>0&&!moving&&!firing&&avatarAnim.actions.jumpland)avatarAnim.play('jumpland',0.05,true,1.8);   // landing recovery, interrupted by any input
     else if(player.hitT>0&&!firing)avatarAnim.layer(loco,'hit',0.06,true,tsLo,1.2);            // hit reaction on the upper body
     else if(firing&&moving&&loco==='walk'||firing&&moving&&loco==='run')avatarAnim.play('runshoot',0.08,false,tsLo);   // dedicated run-and-gun clip

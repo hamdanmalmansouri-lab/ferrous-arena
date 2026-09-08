@@ -16,8 +16,9 @@ const FEM=path.join(ROOT,'modular females','Individual Characters','glTF');
 const MALE=path.join(ROOT,'Modular male','Individual Characters','glTF');
 const GUNS=path.join(ROOT,'sci-fi guns','Guns','glTF');
 const UAL=path.join(ROOT,'Universal Animation Library[Standard]','Universal Animation Library[Standard]','Unreal-Godot','UAL1_Standard.glb');
-/* Universal Animation Library clips retargeted onto the human rig (see tools/retarget.js): jump start / loop / land */
-const UAL_CLIPS={Jump_Start:'jumpstart',Jump_Loop:'jumploop',Jump_Land:'jumpland'};
+/* Universal Animation Library clips retargeted onto the human rig (see tools/retarget.js): jump start / loop / land, pistol reload
+   (played as an upper-body layer while player.reloading>0; the UAL has no rifle reload, the arms are two-hand-free so it reads pistol-ish) */
+const UAL_CLIPS={Jump_Start:'jumpstart',Jump_Loop:'jumploop',Jump_Land:'jumpland',Pistol_Reload:'reload'};
 const OUT=path.join(__dirname,'..','src','06-assets.js');
 
 /* clip vocabulary used by the game: idle walk run shoot jump die hit attack charge emote */
@@ -79,7 +80,7 @@ function loadDoc(io,file){
       barrel={axis:'xyz'[ax],sign:cross(1)<cross(-1)?1:-1}; }
     /* clips: keep + rename */
     for(const a of root.listAnimations()){ const nm=rec.clips&&rec.clips[a.getName()]; if(nm)a.setName(nm); else a.dispose(); }
-    if(rec.ual&&ualDoc)for(const src in rec.ual)retargetClip(doc,ualDoc,src,rec.ual[src],{});
+    if(rec.ual&&ualDoc)for(const src in rec.ual){ try{ retargetClip(doc,ualDoc,src,rec.ual[src],{}); }catch(e){ console.warn('  UAL clip skipped for',id+':',e.message); } }   // a missing UAL clip must not sink the whole pack
     /* fingers: bake the gun-grip pose ('aim', first key) into the finger bones' rest transform and drop every finger channel —
        40 finger bones × 13 clips were ~55 % of a human's file, for motion nobody sees behind a rifle */
     if(rec.bakeFingers){ const isF=n=>/^(Index|Middle|Ring|Pinky|Thumb)\d/.test(n.getName()); const aim=root.listAnimations().find(a=>a.getName()==='aim');

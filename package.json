@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "@gltf-transform/core": "^4.5.0",
+    "@gltf-transform/extensions": "^4.5.0",
+    "@gltf-transform/functions": "^4.5.0",
+    "gl-matrix": "^3.4.4",
+    "playwright": "^1.63.0",
+    "sharp": "^0.35.4",
+    "three": "^0.128.0"
+  }
+}

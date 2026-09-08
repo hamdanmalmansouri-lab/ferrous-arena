@@ -80,6 +80,7 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
   (`Wrist.R` → `WristR`). Human bones: `Root → Body → Hips → Abdomen → Torso → Chest → Neck → Head`, `Shoulder/UpperArm/LowerArm/Wrist.L/R` + fingers,
   `UpperLeg/LowerLeg/Foot/PT.L/R`. Human clips (13): `idle` (Idle_Gun, weapon lowered) `aim` (Idle_Gun_Pointing) `shoot` (Idle_Gun_Shoot)
   `runshoot` (Run_Shoot) `run` `walk` `runL/runR/runB` (strafes, back-pedal) `roll` `hit` `die` `emote` (Wave), plus `jumpstart / jumploop / jumpland`
+  + `reload` (Pistol_Reload)
   **retargeted from the Universal Animation Library** (`tools/retarget.js`: both rigs bind in a T-pose facing +Z at ~1.85 m, so per-bone world-rotation
   deltas from the bind pose (`inverseBindMatrices`) transfer directly; pelvis → `Body` with translation, feet → the IK-style `Foot.L/R` bones under `Root`
   with world placement; sampled at 30 fps; `MAP` in that file is the bone table). Sci-Fi Guns lie along X with the
@@ -97,6 +98,7 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
   its last pose even if the same request is repeated each step. **Never use `timeScale` 0** — `isRunning()` is false and the mixer stops writing it; use 0.02.
 - States: player → `roll` one-shot (Blink) / airborne = `jumpstart` one-shot at 2.4× for the first 0.32 s while rising, then `jumploop` / on touchdown after
   ≥ 0.2 s of air `jumpland` one-shot at 1.8× (`player.landT` 0.55 s, dropped by any move/fire input) / `hit` one-shot on the upper body while `player.hitT` (not firing) /
+  reloading (`player.reloading>0`, clip present) = locomotion legs + `reload` one-shot on the upper body, `timeScale` = clip length / `reloadT` so it spans the reload /
   firing + moving forward = `runshoot` / firing + strafing or backing = `runL|runR|runB` + `shoot` / firing standing = `shoot` / moving = `walk`
   (`run` when sprinting, strafe clips by `inp.r` vs `inp.f`) / standing within 2.5 s of a shot (`player.aimT`) = `idle` legs + `aim` at 0.02× /
   else `idle`.

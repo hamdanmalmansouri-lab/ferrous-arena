@@ -183,7 +183,7 @@ Known gaps carried forward: no store wrappers; phone load time / frame rate unme
 
 **Goal:** characters that read as alive — locomotion blends, aim, recoil, hit and death reactions — driven by the glTF rigs from phase 3.
 
-- [x] **Animation clips** *(from the Quaternius modular packs, v2.7)*: idle, walk, run, strafe L/R, back, fire, run-and-fire, roll (ability), hit, death, wave; jump start/loop/land retargeted from the Universal Animation Library — no reload clip. Enemies: idle, run, attack, hit, death; Warden: idle, walk, charge, attack, death.
+- [x] **Animation clips** *(from the Quaternius modular packs, v2.7)*: idle, walk, run, strafe L/R, back, fire, run-and-fire, roll (ability), hit, death, wave; jump start/loop/land and pistol reload retargeted from the Universal Animation Library (reload plays as an upper-body layer; the clip lands in the bundle on the next `pack-quaternius` run — the packs are not on every machine). Enemies: idle, run, attack, hit, death; Warden: idle, walk, charge, attack, death.
 - [x] **`AnimationMixer` per actor** with a small state machine: locomotion crossfades driven by velocity (idle↔walk↔sprint), masked upper-body layer for aim/fire/attack so legs keep running while shooting *(masked split rather than additive — the clips have no neutral reference pose to make additive deltas from; strafe clips do not exist in either pack)*.
 - [x] **Aim IK-lite:** torso bone pitched after the mixer update spine/head bones rotated toward the camera pitch each frame (replaces `gun.rotation.x` hack); weapon parented to the hand bone.
 - [x] **Procedural layers:** recoil kick on fire, camera shake on boss burst/charge, hit-flinch via a 120 ms torso pose, ragdoll-free death (play clip, sink through the floor).
@@ -191,7 +191,7 @@ Known gaps carried forward: no store wrappers; phone load time / frame rate unme
 - [x] **Mobile budget:** ≤ 20 mixers active (alive cap); enemies beyond 25 m update animation at 15 Hz *(instanced crowd / VAT deferred with the alive cap)*.
 - [x] **Lobby polish:** pod displays play idle + a jump emote when selected; pod heads look toward the camera (menu backdrop and lobby).
 
-**AC:** no visible foot sliding at walk/run speeds (clip `timeScale` follows speed — **eyeball on desktop**); firing while sprinting shows both layers ✅ (`test6.js`: `sprint|holding-right-shoot`); every actor has a death animation ✅; frame budget from phase 1 still met ✅ desktop (73 calls at the cap) — **phone still unmeasured**. Open: bespoke clips (reload, strafe, hit, 2nd death) need a richer rig — folds into the Quaternius swap.
+**AC:** no visible foot sliding at walk/run speeds (clip `timeScale` follows speed — **eyeball on desktop**); firing while sprinting shows both layers ✅ (`test6.js`: `sprint|holding-right-shoot`); every actor has a death animation ✅; frame budget from phase 1 still met ✅ desktop (73 calls at the cap) — **phone still unmeasured**. Open: 2nd death variant and crouch (UAL `Death01`, `Crouch_*`); reload/strafe/hit shipped with the Quaternius swap.
 
 ---
 
