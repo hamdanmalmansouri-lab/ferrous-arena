@@ -55,6 +55,7 @@ function showSettings(back){
     '</div>'+
     '<div class="seg"><span>Toggles</span><button data-t="invert" class="'+(SETTINGS.invertY?'on':'')+'">Invert Y</button>'+
     (TOUCH?'<button data-t="assist" class="'+(touch.assist?'on':'')+'">Aim assist</button><button data-t="auto" class="'+(touch.autoFire?'on':'')+'">Auto-fire</button>':'')+
+    '<button data-t="shake" class="'+(SETTINGS.shake?'on':'')+'">Screen shake</button>'+
     '<button data-t="overlay" class="'+(dbgOn?'on':'')+'">FPS overlay</button></div>'+
     '<button id="back">Back</button>');
   card.querySelectorAll('.seg button[data-q]').forEach(b=>{ b.onclick=()=>{ setQuality(b.dataset.q); SFX.ui(); showSettings(back); }; });
@@ -65,6 +66,7 @@ function showSettings(back){
     if(k==='invert'){ SETTINGS.invertY=!SETTINGS.invertY; save.set('invertY',SETTINGS.invertY); }
     else if(k==='assist'){ touch.assist=!touch.assist; save.set('aimassist',touch.assist); }
     else if(k==='auto'){ touch.autoFire=!touch.autoFire; save.set('autofire',touch.autoFire); }
+    else if(k==='shake'){ SETTINGS.shake=!SETTINGS.shake; save.set('shake',SETTINGS.shake); }
     else if(k==='overlay'){ toggleDebug(); }
     SFX.ui(); showSettings(back); }; });
   $('back').onclick=back;

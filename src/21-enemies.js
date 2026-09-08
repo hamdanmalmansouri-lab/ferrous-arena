@@ -22,17 +22,18 @@ function enemyGeo(type){
   const g={torso:mergeGeos([boxPart(.78,.9,.5,0,1.1,0)]),metal:mergeGeos(metal)};
   return ENEMY_GEO[type]=g;
 }
-const ENEMY_MODEL={chaser:'enemy_rusher',shooter:'enemy_lancer',boss:'enemy_warden',dummy:'dummy'};
-const ENEMY_TINT={chaser:0xff7a6a,shooter:0xc9a0ff,boss:0xffd166,dummy:0x9fb4cc};
+const ENEMY_MODEL={chaser:'mech_leela',shooter:'enemy_drone',boss:'enemy_quad',dummy:'mech_leela'};
+const ENEMY_TINT={chaser:0xd8352a,shooter:0xc06cff,boss:0xffb52e,dummy:0x6b7b8c};
+const HOVER_Y={shooter:1.25};                       // the Lancer drone floats
+const FLINCH_BONES=['Chest','Torso','Root','Body'];
 const corpses=[];
 function makeEnemy(type,wave){
   const g=new THREE.Group();
   let animator=null, bones=null;
   if(MODELS.ok&&MODELS.items[ENEMY_MODEL[type]]){
-    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); c.group.rotation.y=Math.PI; g.add(c.group); animator=c.animator; bones=c.bones;
-    if(type==='shooter'){ const gm=spawnProp('gun_lancer'); const arm=c.bones['arm-right'];
-      if(gm&&arm){ const go=new THREE.Group(); go.add(gm); go.position.fromArray(GUN_MOUNT.pos).divideScalar(c.scale); go.rotation.fromArray(GUN_MOUNT.rot); go.scale.setScalar(GUN_MOUNT.scale/c.scale); arm.add(go); } }
-    if(type==='boss'){ const crest=new THREE.Mesh(new THREE.BoxGeometry(.12,.45,.55),basicMat(0xffd166)); crest.position.set(0,1.95,0); g.add(crest); }
+    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones;
+    if(HOVER_Y[type])c.group.position.y=HOVER_Y[type];
+    bones.flinch=null; for(const b of FLINCH_BONES)if(bones[b]){ bones.flinch=bones[b]; break; }
   } else buildEnemyProcedural(g,type);
   return finishEnemy(g,type,wave,animator,bones);
 }
@@ -69,7 +70,7 @@ function finishEnemy(g,type,wave,animator,bones){
     cd:type==='shooter'?1.2+Math.random():0.6, cd2:3.5, charge:0, dead:false, hurt:0, strafe:Math.random()<.5?1:-1,
     strafeT:1+Math.random()*2, bob:Math.random()*6, ref:{legs:[],arms:[]}, spawnT:0, wander:new THREE.Vector3(), wanderT:0,
     speedMul:1, path:null, pathI:0, navT:Math.random()*0.4, navGoal:-1,
-    animator:animator, bones:bones, attackT:0, shootT:0, hitBoxes:[bodyHit,headHit]
+    animator:animator, bones:bones, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
   };
   g.children.forEach(c=>{ if(c.userData.leg)e.ref.legs.push(c); if(c.userData.arm)e.ref.arms.push(c); });
   bodyHit.userData.enemy=e; bodyHit.userData.head=false;
@@ -79,7 +80,7 @@ function finishEnemy(g,type,wave,animator,bones){
   return e;
 }
 function removeEnemy(e,keepCorpse){
-  if(keepCorpse&&e.animator){ e.hitBoxes.forEach(h=>e.group.remove(h)); e.animator.play('die',0.08,true); corpses.push({g:e.group,an:e.animator,t:1.4}); }
+  if(keepCorpse&&e.animator&&e.animator.actions.die){ e.hitBoxes.forEach(h=>e.group.remove(h)); e.animator.play('die',0.08,true); corpses.push({g:e.group,an:e.animator,t:Math.min(2.6,e.animator.actions.die.getClip().duration+0.4)}); }
   else scene.remove(e.group);
   for(let i=enemyHitMeshes.length-1;i>=0;i--)
     if(enemyHitMeshes[i].userData.enemy===e)enemyHitMeshes.splice(i,1);

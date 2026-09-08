@@ -17,7 +17,7 @@ function tryFire(){
   const od=(CH().id==='vanguard'&&player.abActive>0);
   player.mag--; player.fireCd=s.fireT/(od?1.6:1); state.acc.shots++;
   if(CH().id==='bulwark')SFX.shotHeavy(); else if(CH().id==='ranger')SFX.shotSnipe(); else SFX.shot();
-  player.recoil=Math.min(player.recoil+s.recoil,0.16);
+  player.recoil=Math.min(player.recoil+s.recoil,0.16); player.aimT=2.5; player.kick=Math.min(1,player.kick*0.5+(CH().id==='bulwark'?1:CH().id==='ranger'?0.85:0.6));
   flash.intensity=3.2; flashMesh.material.opacity=.9;
   crossEl.classList.add('wide'); clearTimeout(crossEl._t);
   crossEl._t=setTimeout(()=>crossEl.classList.remove('wide'),110);
@@ -64,7 +64,7 @@ function killEnemy(e,head){
   const pts=(e.type==='boss'?1500:e.type==='shooter'?170:110)*(head?2:1);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
-    SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40);
+    SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
     say('<b>WARDEN DESTROYED</b> +'+pts,'item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
     state.boss=null; bossDefeated(e.group.position.clone());

@@ -6,7 +6,6 @@ const colliderMeshes=[];         // meshes for raycasts
 const interactables=[];          // {pos,r,label,action}
 const spinners=[];               // {obj,speed}
 const targets=[];                // practice-range targets
-const podAnims=[];               // lobby pod idle animators
 let targetHitMeshes=[];
 
 /* merge a list of {geo, matrix} into one indexed BufferGeometry (position/normal/uv) */
@@ -102,7 +101,7 @@ function clearWorld(){
   boxes.length=0; colliderMeshes.length=0; interactables.length=0; spinners.length=0;
   targets.length=0; targetHitMeshes=[];
   for(let i=enemies.length-1;i>=0;i--)removeEnemy(enemies[i]);
-  corpses.forEach(c=>scene.remove(c.g)); corpses.length=0; podAnims.length=0;
+  corpses.forEach(c=>scene.remove(c.g)); corpses.length=0; podDisplays.length=0;
   projectiles.forEach(p=>releaseProjectile(p)); projectiles.length=0;
   pickups.forEach(p=>scene.remove(p.g)); pickups.length=0;
   sparks.forEach(s=>{s.m.visible=false;}); sparks.length=0;
@@ -127,11 +126,11 @@ function buildLobby(){
     const ring=new THREE.Mesh(new THREE.TorusGeometry(1.75,.07,8,40),new THREE.MeshBasicMaterial({color:ch.color}));
     ring.rotation.x=Math.PI/2; ring.position.set(x,.52,z); world.add(ring);
     const disp=buildAvatarModel(ch); disp.position.set(x,.5,z); world.add(disp); spinners.push({obj:disp,speed:.5,axis:'y'});
-    if(disp.userData.animator){ disp.userData.animator.play('idle',0); podAnims.push(disp.userData.animator); }
+    if(disp.userData.animator)disp.userData.animator.play('idle',0);
     const l=new THREE.PointLight(ch.color,1.2,8,2); l.position.set(x,3.2,z); world.add(l);
     const lab=makeLabel(ch.name.toUpperCase(),ch.css,.8); lab.position.set(x,3.4,z); world.add(lab);
     const sub=makeLabel(ch.role,'#8fa2bd',.5); sub.position.set(x,2.85,z); world.add(sub);
-    podDisplays.push({ring:ring,idx:i});
+    podDisplays.push({ring:ring,idx:i,obj:disp,anim:disp.userData.animator||null,head:disp.userData.bones?(disp.userData.bones.Head||disp.userData.bones.head||null):null});
     interactables.push({pos:new THREE.Vector3(x,0,z),r:2.6,label:'Select '+ch.name,action:()=>selectChar(i,true)});
   });
   /* back wall panel */
@@ -144,8 +143,20 @@ function buildLobby(){
   [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?0x33404f:0x2c3745));
   finalizeWorld(); updatePodRings();
 }
-function updatePodRings(){
-  podDisplays.forEach(p=>{ p.ring.material.color.set(p.idx===run.charIdx?0xffffff:CHARS[p.idx].color); p.ring.scale.setScalar(p.idx===run.charIdx?1.15:1); });
+function updatePodRings(emote){
+  podDisplays.forEach(p=>{ p.ring.material.color.set(p.idx===run.charIdx?0xffffff:CHARS[p.idx].color); p.ring.scale.setScalar(p.idx===run.charIdx?1.15:1);
+    if(emote&&p.anim&&p.idx===run.charIdx)p.anim.play('emote',0.1,true,1); });   // 'Hello' wave on select
+}
+/* lobby pods: advance idle/emote, return to idle after a one-shot, and turn each head toward the viewer */
+const _podV=new THREE.Vector3();
+function tickPods(dt,eye){
+  for(const p of podDisplays){
+    if(!p.anim)continue;
+    p.anim.update(dt); if(p.anim.once&&p.anim.finished())p.anim.play('idle',0.25);
+    if(p.head){ p.obj.getWorldPosition(_podV); const want=Math.atan2(eye.x-_podV.x,eye.z-_podV.z);
+      let d=want-(p.obj.rotation.y+Math.PI); d=Math.atan2(Math.sin(d),Math.cos(d));
+      poseOffset(p.head,'y',Math.abs(d)<1.5?Math.max(-0.9,Math.min(0.9,d)):0); }
+  }
 }
 
 /* ---- map: practice range ---- */

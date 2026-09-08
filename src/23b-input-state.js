@@ -12,7 +12,7 @@ const touch={active:false,move:{x:0,y:0,len:0},fire:false,jump:false,stickId:nul
              assist:true,autoFire:false,sens:0.0045};
 const pad={connected:false,prev:[],fire:false,f:0,r:0,sprint:false,jump:false};
 const SETTINGS={touchSens:save.get('touchSens',1.0),mouseSens:save.get('mouseSens',1.0),padSens:save.get('padSens',1.0),
-  volume:save.get('volume',0.9),invertY:save.get('invertY',false),overlay:false};
+  volume:save.get('volume',0.9),invertY:save.get('invertY',false),shake:save.get('shake',true)!==false,overlay:false};
 const TOUCH_SENS_BASE=0.0085, MOUSE_SENS_BASE=0.0022, PAD_SENS_BASE=2.8;
 function applySettings(){ touch.sens=TOUCH_SENS_BASE*SETTINGS.touchSens; if(master)master.gain.value=SETTINGS.volume; }
 const AUTO_FIRE=save.get('autofire',false), AIM_ASSIST=save.get('aimassist',true);

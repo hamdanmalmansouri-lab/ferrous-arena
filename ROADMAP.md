@@ -70,7 +70,30 @@ Legend: `[x]` shipped · `[ ]` open · **AC** acceptance criteria
 - [x] `test5.js`
 - Result: ~70 draw calls / ~17k tris with 16 enemies; bundle 1.8 MB (was 125 KB) — still far under the artifact cap; phone verification of load time pending
 
-Known gaps carried forward: Kenney toy art style (only reachable rigged CC0 set), whole-body animation layering, no store wrappers.
+### v2.5 — Phase 5: animation layers and procedural motion
+- [x] Lower/upper body clip split (`splitClip`): locomotion on root + legs, aim/fire/attack on torso + arms + head — the player runs while shooting, Lancers walk while aiming, Rushers swing while sprinting; `animator.layer(lower, upper)` beside `play(full)`
+- [x] Fixed: one-shot clips restarted every step (the Rusher/Warden melee swing never played past its first frame)
+- [x] Procedural layers: weapon recoil kick per shot (per-operative strength), torso hit flinch on the player and every enemy, camera shake on boss bursts/charges, reactor shockwave hits, damage taken and Warden kills — "Screen shake" toggle in Settings
+- [x] Animation LOD: mixers beyond 25 m (14 m on the low tier) step at 15 Hz; count shown on the debug overlay with the avatar's layer state
+- [x] Lobby: the selected pod plays a jump emote; pod heads track the camera in the lobby and behind the main menu
+- [x] `test6.js`
+
+### v2.6 — Phase 3b: Quaternius sci-fi cast
+- [x] `tools/pack-quaternius.js`: gltf-transform pipeline (strip PBR maps, keep + rename clips to one vocabulary, resample, quantize, prune), pre-quantization bounds stored per model, per-pack base-colour JPEG + emissive PNG; `Assets/` folder holds the downloaded packs (not in git)
+- [x] Animated Mech Pack operatives — Vanguard = Mike + Rifle, Ranger = Stan + Sniper, Bulwark = George + Revolver — tinted to the operative colour, with their own Idle / Walk_Holding / Run_Holding / Shoot / Jump / Death / Hit / Hello clips
+- [x] Sci-Fi Essentials Kit enemies — Rusher + dummy = Leela (kick attack), Lancer = hovering EyeDrone, Warden = QuadShell (Charge / Attack / TurnOff) — tinted through their emissive maps + a colour cast; kit crate, health pack and ammo module as pickups
+- [x] `alignGun()`: weapon orientation solved from the rig's shoot pose at build time (any mech, any gun); `poseOffset()` fixes procedural bone offsets accumulating on held poses
+- [x] Lobby wave emote (`Hello`), head tracking on the new `Head` bone
+- Result: ~104 draw calls / ~72k tris with 16 enemies; bundle 4.5 MB (assets 4.2 MB); all six suites green
+
+### v2.7 — Phase 3c: human operatives (current)
+- [x] Operatives from the Ultimate Modular Men/Women packs — Vanguard = Swat, Ranger = SciFi (blue hair), Bulwark = Spacesuit — with 13 of their 24 clips: idle / aim / shoot / run-and-gun / walk / run / strafe L-R / back-pedal / roll / hit / death / wave
+- [x] Sci-Fi Guns pack: AR_2 / Sniper_3 / Grenade_2, `Main` accent tinted per operative; packer detects each gun's barrel end; fingers baked into the grip pose (file −25 %)
+- [x] Avatar state machine: strafe / back-pedal clips from the move vector, `Run_Shoot` when firing on the move, roll on Blink, upper-body hit reaction, aim hold for 2.5 s after the last shot
+- [x] Jump start / loop / land from the Universal Animation Library, retargeted onto the human rig in the packer (`tools/retarget.js`, world-space bind-pose deltas); take-off → airborne loop → landing recovery
+- Result: ~110–126 draw calls / ~70k tris with 16 enemies; bundle 5.6 MB (assets 5.3 MB); all six suites green
+
+Known gaps carried forward: no store wrappers; phone load time / frame rate unmeasured; kit Trilobite unused.
 
 ---
 
@@ -123,7 +146,7 @@ Known gaps carried forward: Kenney toy art style (only reachable rigged CC0 set)
 
 **Goal:** replace the box-people with real low-poly characters, weapons and enemies while staying within the single-file / no-external-fetch constraint for the artifact.
 
-- [x] **Art direction (decided by availability)** Kenney Mini Characters + Blaster kit; sci-fi rigs can replace them later through the same packer. (one page in `docs/`): low-poly sci-fi, hard edges, 2-tone materials, ~1.5k tris per character, 600 per enemy, 6k for the Warden. Palette locked to the three operative colours + enemy red/purple/gold.
+- [x] **Art direction** — v2.6: Quaternius Animated Mech Pack (flat colours) + Sci-Fi Essentials Kit, low-poly sci-fi, hard edges. Palette: the three operative colours on the mechs' `Main` material + enemy red/purple/gold glows. *(v2.4 shipped Kenney Mini Characters as the interim set.)*
 - [x] **Pipeline.** Author or source CC0 glTF models (Kenney, Quaternius, or Blender-built), run through `gltf-transform` (`dedup`, `prune`, `weld`, `quantize`, `draco` or `meshopt`), inline `GLTFLoader` + `DRACOLoader` (three/examples, r128) into the file, embed the `.glb` as a base64 data URI. Budget: ≤ 2.5 MB of model data total so the artifact stays well under 16 MB and mobile first-load stays quick.
 - [x] **Loading screen** with a progress bar (models decode asynchronously; menu can show while they stream in).
 - [x] **Operatives:** one shared humanoid rig with three material/attachment variants (helmet, shoulder pads, scope) to keep the file small; per-operative weapon meshes; muzzle socket as a named empty in the glTF (replaces the hard-coded `muzzleZ`).
@@ -132,7 +155,7 @@ Known gaps carried forward: Kenney toy art style (only reachable rigged CC0 set)
 - [x] **Materials:** one 512² palette per pack, nearest-filtered `MeshStandardMaterial` with a tiny 2-tone matcap or flat vertex colours — no PBR textures (they are the file-size killer). Emissive slots for visors, cores, portals.
 - [x] Keep the procedural box models behind a `USE_FALLBACK_MODELS` flag so the game still boots if decoding fails.
 
-**AC:** every actor rendered from glTF on all maps ✅; standalone file ≤ 6 MB ✅ (1.8 MB); artifact publishes ✅; draw calls within budget ✅ (~70); first playable frame ≤ 3 s on a phone on 4G (**needs a phone check — the loading bar shows progress**).
+**AC:** every actor rendered from glTF on all maps ✅; standalone file ≤ 6 MB ✅ (4.5 MB); artifact publishes ✅; draw calls within budget ✅ (~104); first playable frame ≤ 3 s on a phone on 4G (**needs a phone check — 4.5 MB first load, cached by the SW afterwards**).
 
 ---
 
@@ -160,15 +183,15 @@ Known gaps carried forward: Kenney toy art style (only reachable rigged CC0 set)
 
 **Goal:** characters that read as alive — locomotion blends, aim, recoil, hit and death reactions — driven by the glTF rigs from phase 3.
 
-- [ ] **Animation clips** authored in Blender (or Mixamo-retargeted) on the shared humanoid rig: idle, walk, run, strafe L/R, jump/fall/land, fire, reload, ability cast, hit, death (2 variants). Enemies: idle, run, attack, hit, death; Warden: idle, walk, charge, burst, death.
-- [x] **`AnimationMixer` per actor** *(locomotion crossfades; the additive upper-body layer is still open)* with a small state machine: locomotion blend tree driven by velocity (idle↔walk↔run, strafe weights from lateral speed), additive upper-body layer for aim/fire/reload so legs keep running while shooting.
+- [x] **Animation clips** *(from the Quaternius modular packs, v2.7)*: idle, walk, run, strafe L/R, back, fire, run-and-fire, roll (ability), hit, death, wave; jump start/loop/land retargeted from the Universal Animation Library — no reload clip. Enemies: idle, run, attack, hit, death; Warden: idle, walk, charge, attack, death.
+- [x] **`AnimationMixer` per actor** with a small state machine: locomotion crossfades driven by velocity (idle↔walk↔sprint), masked upper-body layer for aim/fire/attack so legs keep running while shooting *(masked split rather than additive — the clips have no neutral reference pose to make additive deltas from; strafe clips do not exist in either pack)*.
 - [x] **Aim IK-lite:** torso bone pitched after the mixer update spine/head bones rotated toward the camera pitch each frame (replaces `gun.rotation.x` hack); weapon parented to the hand bone.
-- [ ] **Procedural layers:** recoil kick on fire, camera shake on boss burst/charge, hit-flinch via a 120 ms additive pose, ragdoll-free death (play clip, sink through the floor, pool the actor).
-- [ ] **Dummies in the range** cycle idle/walk/hit so animation can be tested without a live fight; add an animation-debug panel (clip name, blend weights).
-- [ ] **Mobile budget:** ≤ 40 mixers active; enemies beyond 25 m update animation at 15 Hz; instanced crowd uses vertex-animation textures if skinned instancing proves too costly (decide after measuring).
-- [ ] **Lobby polish:** pod displays play idle + a signature emote when selected; menu backdrop operatives look toward the camera.
+- [x] **Procedural layers:** recoil kick on fire, camera shake on boss burst/charge, hit-flinch via a 120 ms torso pose, ragdoll-free death (play clip, sink through the floor).
+- [x] **Dummies in the range** cycle idle/walk and flinch on hit so animation can be tested without a live fight; the debug overlay (`) shows the avatar's layer state, active mixers and LOD count.
+- [x] **Mobile budget:** ≤ 20 mixers active (alive cap); enemies beyond 25 m update animation at 15 Hz *(instanced crowd / VAT deferred with the alive cap)*.
+- [x] **Lobby polish:** pod displays play idle + a jump emote when selected; pod heads look toward the camera (menu backdrop and lobby).
 
-**AC:** no visible foot sliding at walk/run speeds; firing while sprinting shows both layers; every actor has a death animation; frame budget from phase 1 still met with 30 animated enemies on desktop and 16 on phone.
+**AC:** no visible foot sliding at walk/run speeds (clip `timeScale` follows speed — **eyeball on desktop**); firing while sprinting shows both layers ✅ (`test6.js`: `sprint|holding-right-shoot`); every actor has a death animation ✅; frame budget from phase 1 still met ✅ desktop (73 calls at the cap) — **phone still unmeasured**. Open: bespoke clips (reload, strafe, hit, 2nd death) need a richer rig — folds into the Quaternius swap.
 
 ---
 
@@ -191,8 +214,8 @@ Known gaps carried forward: Kenney toy art style (only reachable rigged CC0 set)
 | 1 | Performance & architecture ✅ | M | — |
 | 2a/2b | Touch + PWA ✅ | M | 1 |
 | 4 (nav + stage flow + 4 maps) | Maps ✅ | M | 1 |
-| 3 | Models ✅ (Kenney) | L | 1 (budget), loading screen |
-| 5 | Animations | L | 3 |
+| 3 | Models ✅ (Quaternius, v2.6–2.7) | L | 1 (budget), loading screen |
+| 5 | Animations ✅ | L | 3 |
 | 4 (more maps, per-map boss arenas) | Maps, part 2 | M | 3, 5 |
 | 2c | Store builds | S–M | 2a, 2b, 3 |
 | 6 | Extras | ongoing | — |

@@ -15,7 +15,7 @@ function useAbility(){
     const p=player.pos.clone();
     for(let k=0;k<16;k++){ const q=p.clone().add(d.clone().multiplyScalar(0.5)); if(resolveXZ(q,PLAYER_R,player.pos.y,1.8))break; p.copy(q); }
     p.x=Math.max(-ARENA+1,Math.min(ARENA-1,p.x)); p.z=Math.max(-ARENA+1,Math.min(ARENA-1,p.z));
-    player.pos.copy(p); player.iframes=0.5; SFX.blink();
+    player.pos.copy(p); player.iframes=0.5; player.rollT=0.5; SFX.blink();
     spark(player.pos.clone().setY(1),0x3ddc84,14);
   }
   syncHUD();

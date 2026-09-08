@@ -58,9 +58,11 @@ function releaseProjectile(p){ p.m.visible=false; }
 function dropPickup(pos,kind){
   const g=new THREE.Group();
   if(kind==='item'){
-    const oct=new THREE.Mesh(new THREE.OctahedronGeometry(.36,0),basicMat(0xffd166));
+    const m=MODELS.ok?spawnProp('module'):null;
+    if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=.7/Math.max(sz.x,sz.y,sz.z); m.scale.setScalar(k); m.position.y=-(b.min.y+b.max.y)/2*k; g.add(m); }
+    else { const oct=new THREE.Mesh(new THREE.OctahedronGeometry(.36,0),basicMat(0xffd166)); g.add(oct); }
     const ring=new THREE.Mesh(new THREE.TorusGeometry(.5,.04,6,24),basicMat(0xffd166));
-    ring.rotation.x=Math.PI/2; g.add(oct,ring,glowSprite(0xffd166,2.6));
+    ring.rotation.x=Math.PI/2; g.add(ring,glowSprite(0xffd166,2.6));
   }else if(kind==='crate'){
     const m=MODELS.ok?spawnProp('crate'):null;
     if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=1.1/Math.max(sz.x,sz.z); m.scale.setScalar(k); m.position.y=-b.min.y*k-.4; g.add(m); }
@@ -68,9 +70,10 @@ function dropPickup(pos,kind){
     const trim=new THREE.Mesh(new THREE.TorusGeometry(.75,.05,6,24),basicMat(0xffd166)); trim.rotation.x=Math.PI/2; trim.position.y=-.35;
     const gl=glowSprite(0xffd166,3.2); gl.position.y=.6; g.add(trim,gl);
   }else{
-    const a=new THREE.Mesh(new THREE.BoxGeometry(.46,.15,.15),basicMat(0x3ddc84));
-    const b=new THREE.Mesh(new THREE.BoxGeometry(.15,.46,.15),basicMat(0x3ddc84));
-    g.add(a,b,glowSprite(0x3ddc84,1.6));
+    const m=MODELS.ok?spawnProp('healthpack'):null;
+    if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=.6/Math.max(sz.x,sz.y,sz.z); m.scale.setScalar(k); m.position.y=-(b.min.y+b.max.y)/2*k; g.add(m); }
+    else { const a=new THREE.Mesh(new THREE.BoxGeometry(.46,.15,.15),basicMat(0x3ddc84)); const b=new THREE.Mesh(new THREE.BoxGeometry(.15,.46,.15),basicMat(0x3ddc84)); g.add(a,b); }
+    g.add(glowSprite(0x3ddc84,1.6));
   }
   g.position.set(pos.x,.9,pos.z); scene.add(g);
   pickups.push({g:g,t:kind==='crate'?9999:40,kind:kind,items:(kind==='crate'&&state.mods.bounty)?2:1});

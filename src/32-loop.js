@@ -36,8 +36,8 @@ function update(dt){
   resolveXZ(player.pos,PLAYER_R,player.pos.y,1.8);
   player.pos.y+=player.vel.y*dt;
   const ground=supportHeight(player.pos,PLAYER_R*0.9);
-  if(player.pos.y<=ground){ player.pos.y=ground; player.vel.y=0; player.grounded=true; }
-  else player.grounded=false;
+  if(player.pos.y<=ground){ player.pos.y=ground; player.vel.y=0; if(!player.grounded&&player.airT>0.2)player.landT=0.55; player.grounded=true; player.airT=0; }
+  else { player.grounded=false; player.airT+=dt; }
   player.pos.x=Math.max(-ARENA+1,Math.min(ARENA-1,player.pos.x));
   player.pos.z=Math.max(-ARENA+1,Math.min(ARENA-1,player.pos.z));
 
@@ -51,19 +51,38 @@ function update(dt){
   /* ---- avatar ---- */
   avatar.position.copy(player.pos);
   avatar.rotation.y=player.yaw;
+  player.kick=Math.max(0,player.kick-dt*7); player.flinch=Math.max(0,player.flinch-dt*8);
+  player.hitT=Math.max(0,player.hitT-dt); player.rollT=Math.max(0,player.rollT-dt); player.aimT=Math.max(0,player.aimT-dt); player.landT=Math.max(0,player.landT-dt);
   if(avatarAnim){
     avatarAnim.update(dt);
     const firing=inp.fire||player.fireCd>0.02||(inp._auto&&touch.autoFire);
-    const st=!player.grounded?(player.vel.y>0?'jump':'fall'):firing?'holding-right-shoot':moving?((inp.sprint&&inp.f>0.5)?'sprint':'walk'):'holding-right';
-    avatarAnim.play(st,0.12,false,st==='walk'?Math.max(.6,s.speed/5):st==='sprint'?Math.max(.8,s.sprint/8):1);
-    if(avatarBones&&avatarBones.torso)avatarBones.torso.rotation.x-=player.pitch*0.45;
+    const sprinting=inp.sprint&&inp.f>0.5;
+    /* locomotion clip from the body-relative move vector: strafes and back-pedal have their own clips */
+    const lat=Math.abs(inp.r)>Math.abs(inp.f)*1.2;
+    const loco=!moving?'idle':lat?(inp.r>0?'runR':'runL'):inp.f<0?'runB':sprinting?'run':'walk';
+    const tsLo=!moving?1:loco==='walk'?Math.min(1.9,Math.max(.8,s.speed/3.6)):Math.min(1.8,Math.max(.8,(sprinting?s.sprint:s.speed)/6.5));
+    if(player.rollT>0)avatarAnim.play('roll',0.06,true,1.4);                                   // Blink
+    else if(!player.grounded&&avatarAnim.actions.jumploop){ if(player.airT<0.32&&player.vel.y>0)avatarAnim.play('jumpstart',0.05,true,2.4); else avatarAnim.play('jumploop',0.15,false,1); }   // UAL jump: take-off, then the airborne loop
+    else if(!player.grounded)avatarAnim.layer(null,'aim',0.12,false,1,0.02);                   // rigs without a jump clip: legs at rest, gun up
+    else if(player.landT>0&&!moving&&!firing&&avatarAnim.actions.jumpland)avatarAnim.play('jumpland',0.05,true,1.8);   // landing recovery, interrupted by any input
+    else if(player.hitT>0&&!firing)avatarAnim.layer(loco,'hit',0.06,true,tsLo,1.2);            // hit reaction on the upper body
+    else if(firing&&moving&&loco==='walk'||firing&&moving&&loco==='run')avatarAnim.play('runshoot',0.08,false,tsLo);   // dedicated run-and-gun clip
+    else if(firing&&moving)avatarAnim.layer(loco,'shoot',0.08,false,tsLo,1);                   // strafing / backing while firing
+    else if(firing)avatarAnim.play('shoot',0.08,false,1);
+    else if(moving)avatarAnim.play(loco,0.12,false,tsLo);
+    else if(player.aimT>0)avatarAnim.layer('idle','aim',0.15,false,1,0.02);                    // recently fired: stay on target (aim clip crawling — timeScale 0 stops the mixer writing it)
+    else avatarAnim.play('idle',0.2,false,1);                                                  // Idle_Gun: weapon lowered
+    /* procedural layers on top of the mixer: aim pitch + hit flinch on the chest, recoil kick on the weapon */
+    if(avatarAimBone)poseOffset(avatarAimBone,'x',-(player.pitch*0.45+player.flinch*0.35));
+    if(gun&&gun.userData.kick){ const k=gun.userData.kick, ax=k.axis||GUN_AXIS;   // kick: pitch the barrel up and push the gun back along its own barrel axis
+      k.obj.rotation[ax.axis==='x'?'z':'x']=player.kick*0.35*(ax.axis==='x'?ax.sign:-ax.sign); k.obj.position[ax.axis]=-ax.sign*player.kick*0.12*k.len; }
   }else{
     const bobAmt=moving?Math.sin(state.t*(inp.sprint?16:11))*0.055:0;
     avatar.position.y+=bobAmt*(player.grounded?1:0);
-    gun.rotation.x=-player.pitch*0.55;
+    gun.rotation.x=-player.pitch*0.55-player.kick*0.3;
   }
   for(let i=corpses.length-1;i>=0;i--){ const c=corpses[i]; c.an.update(dt); c.t-=dt; if(c.t<0.35)c.g.position.y-=dt*2.5; if(c.t<=0){ scene.remove(c.g); corpses.splice(i,1); } }
-  for(const a of podAnims)a.update(dt);
+  tickPods(dt,camera.position);
   flash.intensity*=Math.pow(0.0006,dt);
   flashMesh.material.opacity*=Math.pow(0.0002,dt);
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
@@ -79,6 +98,8 @@ function update(dt){
   camera.position.copy(pivot).addScaledVector(camF,-dist);
   camera.position.y=Math.max(0.5,camera.position.y);
   camera.lookAt(_look.copy(pivot).addScaledVector(camF,12));
+  if(state.shake>0){ state.shake=Math.max(0,state.shake-dt*3); if(SETTINGS.shake){ const a=state.shake*state.shake;
+    camera.position.addScaledVector(camR,Math.sin(state.t*57)*a*0.14).addScaledVector(UP,Math.sin(state.t*43+1.3)*a*0.10); } }
 
   /* ---- world spinners / targets ---- */
   spinners.forEach(sp=>{ sp.obj.rotation.y+=sp.speed*dt; });
@@ -145,22 +166,28 @@ function update(dt){
     /* follow the ground (stairs, platforms) */
     if(nav.ready){ const gh=navHeightAt(g.position.x,g.position.z); const d=gh-g.position.y;
       g.position.y+= (d>0?Math.min(d,8*dt):Math.max(d,-14*dt)); }
+    if(e.type==='shooter'&&e.animator)e.group.children[0].position.y=HOVER_Y.shooter+Math.sin(state.t*2.2+e.bob)*0.12;   // hover bob
 
     if(e.animator){
-      e.animator.update(dt); if(e.attackT>0)e.attackT-=dt; if(e.shootT>0)e.shootT-=dt;
-      const mvn=mv.lengthSq()>0.2; let st, ts=1;
-      if(e.attackT>0)st='attack-melee-right';
-      else if(e.type==='shooter'){ st=e.shootT>0?'holding-right-shoot':mvn?'walk':'holding-right'; ts=mvn?Math.max(.6,e.speed/5):1; }
-      else if(e.type==='dummy'){ st=mvn?'walk':'idle'; ts=.6; }
-      else { st=mvn?(e.type==='boss'&&e.charge<=0?'walk':'sprint'):'idle'; ts=mvn?(st==='walk'?Math.max(.6,e.speed/5):Math.max(.8,e.speed*e.speedMul/8)):1; }
-      e.animator.play(st,0.12,st==='attack-melee-right',ts);
+      /* animation LOD: far enemies (25 m, 14 m on the low tier) step their mixer at 15 Hz */
+      if(distP>(Q.tier==='low'?14:25)){ e.animAcc+=dt; if(e.animAcc>=1/15){ e.animator.update(e.animAcc); e.animAcc=0; } perf.animLod++; }
+      else e.animator.update(dt);
+      if(e.attackT>0)e.attackT-=dt; if(e.shootT>0)e.shootT-=dt;
+      const mvn=mv.lengthSq()>0.2;
+      const loco=!mvn?null:(e.type==='chaser'||(e.type==='boss'&&e.charge>0))?'run':'walk';
+      const tsLo=loco==='run'?Math.max(.8,e.speed*e.speedMul/8):loco==='walk'?(e.type==='dummy'?.6:Math.max(.6,e.speed/5)):1;
+      if(e.type==='shooter'){ e.animator.play(e.shootT>0?'shoot':'idle',0.1,e.shootT>0,1); }   // drone: hover idle, shoot one-shot
+      else if(e.type==='boss'&&e.charge>0)e.animator.play('charge',0.1,false,1);
+      else if(e.attackT>0)e.animator.play('attack',0.08,true,1.2);                              // Leela kick / QuadShell bite
+      else e.animator.play(loco||'idle',0.12,false,tsLo);
+      if(e.bones&&e.bones.flinch)poseOffset(e.bones.flinch,'x',e.hurt>0?-e.hurt*3:0);         // 120 ms hit flinch
     }else{
       e.bob+=dt*(mv.lengthSq()>0.2?9:2);
       e.ref.legs.forEach(l=>{ l.rotation.x=Math.sin(e.bob+(l.userData.leg>0?0:Math.PI))*0.55; });
       e.ref.arms.forEach(a=>{ a.rotation.x=e.type==='shooter'?-1.2:Math.sin(e.bob+(a.userData.arm>0?Math.PI:0))*0.4-0.15; });
     }
 
-    if(e.hurt>0){ e.hurt-=dt; g.scale.setScalar((e.spawnT>0?g.scale.x:e.size)*(1+e.hurt*0.5)); }
+    if(e.hurt>0){ e.hurt-=dt; g.scale.setScalar((e.spawnT>0?g.scale.x:e.size)*(1+e.hurt*(e.animator?0.2:0.5))); }
     else if(e.spawnT<=0)g.scale.setScalar(e.size);
 
     /* attacks (only in a real run) */
@@ -182,11 +209,11 @@ function update(dt){
       if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; e.attackT=0.6; hurtPlayer(22+state.wave*0.8); }
       const burst=()=>{ const m=g.position.clone(); m.y+=1.6; const cnt=12;
         for(let k=0;k<cnt;k++){ const a=k/cnt*Math.PI*2+state.t; shootProjectile(m,new THREE.Vector3(Math.cos(a),-0.05,Math.sin(a)),13,12+state.wave*0.6,0xffb347,true); }
-        blip({type:'square',f0:400,f1:160,d:.3,v:.16}); };
+        blip({type:'square',f0:400,f1:160,d:.3,v:.16}); shakeCam(0.55,distP); };
       if(e.burstLeft>0){ e.burstT-=dt; if(e.burstT<=0){ burst(); e.burstLeft--; e.burstT=0.38; } }
       e.cd2-=dt;
       if(e.cd2<=0){
-        if(e.charge<=0&&Math.random()<0.4&&distP>6){ e.charge=1.3; e.chargeDir=toP.clone(); e.cd2=4.5; blip({type:'sawtooth',f0:90,f1:260,d:.5,v:.22}); }
+        if(e.charge<=0&&Math.random()<0.4&&distP>6){ e.charge=1.3; e.chargeDir=toP.clone(); e.cd2=4.5; blip({type:'sawtooth',f0:90,f1:260,d:.5,v:.22}); shakeCam(0.7,distP); }
         else{ e.cd2=2.6; burst(); if(e.mk>=3){ e.burstLeft=2; e.burstT=0.38; e.cd2=4; } }
       }
       /* Mk.2+: summon Rushers */
@@ -217,7 +244,7 @@ function update(dt){
       if(pu.active){
         pu.r+=13*dt; pu.ring.scale.set(pu.r,pu.r,1);
         const d=Math.hypot(player.pos.x,player.pos.z);
-        if(!pu.hit&&Math.abs(d-pu.r)<0.8){ pu.hit=true; if(player.pos.y-navHeightAt(player.pos.x,player.pos.z)<0.5){ hurtPlayer(14+state.wave*0.6); say('Caught by the <b>shockwave</b>'); } }
+        if(!pu.hit&&Math.abs(d-pu.r)<0.8){ pu.hit=true; if(player.pos.y-navHeightAt(player.pos.x,player.pos.z)<0.5){ hurtPlayer(14+state.wave*0.6); say('Caught by the <b>shockwave</b>'); shakeCam(0.8,0); } }
         if(pu.r>ARENA*1.45){ pu.active=false; pu.ring.visible=false; pu.t=pu.period; pu.warned=false; }
       }
     }
@@ -274,20 +301,21 @@ let hudTick=0;
 
 /* fixed-step simulation: gameplay is identical at 30 and 144 fps */
 const STEP=1/60; let acc=0;
-const perf={fps:0,ms:0,frames:0,t:0,hist:new Float32Array(90),hi:0};
+const perf={fps:0,ms:0,frames:0,t:0,hist:new Float32Array(90),hi:0,animLod:0};
 const dbgEl=$('dbg'),dbgTxt=$('dbgTxt'),dbgC=$('dbgC');
 let dbgOn=false, dbgTick=0;
 function frame(now){
   requestAnimationFrame(frame);
   const raw=(now-last)/1000; last=now;
   const dt=Math.min(0.25,raw);
+  perf.animLod=0;
   if(state.running){
     acc+=dt; let steps=0;
     while(acc>=STEP&&steps<8){ update(STEP); acc-=STEP; steps++; }
     if(steps===8)acc=0;                  // tab was hidden: drop the backlog instead of spiralling
   }else if(state.mode==='menu'){ /* idle orbit for the menu backdrop */
     const t=now/1000; camera.position.set(Math.sin(t*.12)*14,5+Math.sin(t*.3)*.6,Math.cos(t*.12)*14);
-    camera.lookAt(0,1.5,-4); spinners.forEach(sp=>{ sp.obj.rotation.y+=sp.speed*dt; }); for(const a of podAnims)a.update(dt);
+    camera.lookAt(0,1.5,-4); spinners.forEach(sp=>{ sp.obj.rotation.y+=sp.speed*dt; }); tickPods(dt,camera.position);
   }
   renderer.render(scene,camera);
   /* perf sampling + auto-tier probe */
@@ -305,7 +333,8 @@ function drawDebug(){
     'calls '+ri.calls+'  tris '+(ri.triangles/1000).toFixed(1)+'k  geo '+m.geometries+'  tex '+m.textures+'\n'+
     'enemies '+enemies.length+'  proj '+projectiles.length+'  sparks '+sparks.length+'  tracers '+tracers.length+'\n'+
     'mode '+state.mode+'  wave '+state.wave+'  pr '+renderer.getPixelRatio().toFixed(2)+'  shadows '+(renderer.shadowMap.enabled?'on':'off')+'\n'+
-    'input '+(TOUCH?'touch ':'')+(pad.connected?'pad ':'')+'kbm  move '+inp.f.toFixed(2)+','+inp.r.toFixed(2)+(inp.fire?' FIRE':'');
+    'input '+(TOUCH?'touch ':'')+(pad.connected?'pad ':'')+'kbm  move '+inp.f.toFixed(2)+','+inp.r.toFixed(2)+(inp.fire?' FIRE':'')+'\n'+
+    'anim '+(avatarAnim?avatarAnim.current:'-')+'  mixers '+enemies.reduce((n,e)=>n+(e.animator?1:0),0)+' (lod '+perf.animLod+')  corpses '+corpses.length+'  shake '+state.shake.toFixed(2)+'  kick '+player.kick.toFixed(2);
   const c=dbgC.getContext('2d'); c.clearRect(0,0,180,36);
   c.fillStyle='rgba(78,168,255,.8)';
   for(let i=0;i<perf.hist.length;i++){ const v=perf.hist[(perf.hi+i)%perf.hist.length]; const h=Math.min(36,v/50*36); c.fillRect(i*2,36-h,2,h); }

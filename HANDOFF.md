@@ -1,7 +1,7 @@
 # Ferrous Arena — Project Handoff
 
-**Status:** playable v2.4 (roadmap phases 1, 2a/2b, 4, 3 + most of 5 — performance, touch/gamepad, PWA, pathfinding + stages,
-glTF characters with skeletal animation, settings screen), verified error-free in headless Chromium (five suites). Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
+**Status:** playable v2.7 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
+Quaternius modular-human operatives + Sci-Fi Guns, mech/kit enemies, layered skeletal animation with strafes, roll, hit reactions + procedural recoil/flinch/shake, settings screen), verified error-free in headless Chromium (six suites). Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
 **Deliverables:** `ferrous-arena.html` (standalone, open and play) and `docs/` (GitHub Pages PWA for phones).
 **Live copy:** published as a private Claude artifact (same URL since v1).
 
@@ -11,7 +11,7 @@ glTF characters with skeletal animation, settings screen), verified error-free i
 
 A third-person **roguelite wave shooter** in the spirit of Risk of Rain, running entirely in a browser tab.
 Three.js r128 (global `THREE`, non-module build) from cdnjs; everything else is inline in one IIFE.
-Characters, weapons, targets and crates are Kenney CC0 glTF models packed into the file (`ATTRIBUTION.md`); everything else is procedural
+Operatives (Ultimate Modular Men/Women), weapons (Sci-Fi Guns), enemies (Animated Mech Pack, Sci-Fi Essentials Kit), crates and pickups are Quaternius CC0 glTF models packed into the file (`ATTRIBUTION.md`); everything else is procedural
 geometry, WebAudio-synthesised sound and canvas-generated labels. If the packed models fail to parse the game falls back to the v2 box models.
 
 **Flow:** Main menu → Lobby (pick an operative, warm up on the range) → Deploy → waves of robots →
@@ -62,20 +62,56 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 - Scaling: `hp = (34 + wave*9) * (1 + wave*0.035)`, speed `+min(wave*0.16, 2)`; boss waves spawn half the normal count.
 
 ### Models and animation (`05-gltfloader`, `06-assets`, `07-models`)
-- `tools/pack-assets.js <kenney-3d-dir>` picks files (`PICK` map: 3 operatives, 3 enemy variants, dummy, 4 blasters, target, crate), strips the
-  embedded colormap and unused clips, keeps the 10 clips we use in `char_vanguard` only (all Mini Characters share one rig), and writes
-  `src/06-assets.js` (`ASSET_DATA`, ~1.5 MB base64). Re-run it after changing `PICK`.
-- `loadModels()` runs at boot behind a progress bar (`GLTFLoader.parse` per model, shared `THREE.Texture` per pack, nearest-filter palette).
-  `spawnCharacter(id,tint)` → `SkeletonUtils.clone`, scaled to `CHAR_HEIGHT` 1.75 m, per-instance material clone with colour tint, plus an
-  `animator`. `spawnProp(id)` for static props. `makeAnimator()` is a small crossfade state machine over `AnimationMixer`
-  (`play(name,fade,once,timeScale)`, `finished()`).
-- Rig facts: Kenney rigs face **+Z** (game forward is −Z, so instances get `rotation.y=π`); bones `root, torso, head, arm-left/right, leg-left/right`;
-  the arm runs along the bone's local **−X**. Weapons mount on `arm-right` with `GUN_MOUNT` (raw model units, barrel = gun −Z → `rot.y=π/2`).
-  A `muzzle` Object3D at the barrel tip carries the flash mesh, so tracers start from the real gun.
-- States: player → `jump/fall/holding-right-shoot/sprint/walk/holding-right` (torso bone gets the aim pitch after the mixer update);
-  Rusher/Warden → `sprint|walk/idle/attack-melee-right`; Lancer → `walk/holding-right/holding-right-shoot`; dummy → `walk/idle`.
+- **Cast:** Vanguard = Modular Men **Swat** + `AR_2`, Ranger = Modular Women **SciFi** (blue hair) + `Sniper_3`, Bulwark = Modular Men **Spacesuit** + `Grenade_2`
+  (Sci-Fi Guns pack; each gun's `Main` accent material is tinted to the operative colour, outfits keep their own palette); Rusher and dummy = Leela
+  (Animated Mech Pack, red / grey); Lancer = Sci-Fi Kit EyeDrone (hovers at `HOVER_Y` 1.25 m, purple glow); Warden = QuadShell (gold glow, `size` 2.3);
+  crate = Prop_Crate, repair kit = Prop_HealthPack, item module = Prop_Ammo_Small. Range targets are procedural plates.
+- `tools/pack-quaternius.js <Assets dir>` (gltf-transform + sharp) reads the packs from `Assets/` (not in git), keeps only the clips in each model's
+  clip map **renamed to one vocabulary — `idle walk run shoot jump die hit attack charge emote`** — strips the PBR texture set, resamples + quantizes,
+  stores the pre-quantization bounds (`raw.h/minY/min/max/size`, needed because skinned quantized meshes bake the dequantize transform into their
+  bind matrices), the target `height`, and for guns the detected **barrel axis** (`raw.barrel = {axis,sign}`: the thin end of the long axis), and writes
+  `src/06-assets.js` (`ASSET_DATA.models/maps/meta`, ~5.0 MB). Humans: the placeholder `Pistol` mesh is dropped (`drop`) and the 40 finger bones get the
+  gun-grip pose of the `aim` clip baked into their rest transform while every finger channel is removed (`bakeFingers` — halves the file). Per textured pack one base-colour JPEG
+  (512–1024 px) + one 256 px emissive PNG are emitted and re-attached by `loadModels()` to materials flagged `extras.packmap`.
+- `loadModels()` runs at boot behind a progress bar (`GLTFLoader.parse` per model). `spawnCharacter(id,tint)` → `SkeletonUtils.clone`, scaled so the
+  raw height hits the packed `height`, feet at y=0, per-instance material clone; tint = `Main` colour on flat mechs, emissive glow + 55 % colour cast on
+  textured kit models. `spawnProp(id)` for static props. `makeAnimator(root, rec.animations)` — each model carries its own clips.
+- **Rig facts:** Quaternius rigs face **+Z** (game forward is −Z → `MODEL_YAW=π` on every instance). GLTFLoader strips dots from node names
+  (`Wrist.R` → `WristR`). Human bones: `Root → Body → Hips → Abdomen → Torso → Chest → Neck → Head`, `Shoulder/UpperArm/LowerArm/Wrist.L/R` + fingers,
+  `UpperLeg/LowerLeg/Foot/PT.L/R`. Human clips (13): `idle` (Idle_Gun, weapon lowered) `aim` (Idle_Gun_Pointing) `shoot` (Idle_Gun_Shoot)
+  `runshoot` (Run_Shoot) `run` `walk` `runL/runR/runB` (strafes, back-pedal) `roll` `hit` `die` `emote` (Wave), plus `jumpstart / jumploop / jumpland`
+  **retargeted from the Universal Animation Library** (`tools/retarget.js`: both rigs bind in a T-pose facing +Z at ~1.85 m, so per-bone world-rotation
+  deltas from the bind pose (`inverseBindMatrices`) transfer directly; pelvis → `Body` with translation, feet → the IK-style `Foot.L/R` bones under `Root`
+  with world placement; sampled at 30 fps; `MAP` in that file is the bone table). Sci-Fi Guns lie along X with the
+  barrel at +X and are modelled at ~2× human scale (`GUN_MOUNT.scale` 0.5). The weapon is mounted in `WristR` and oriented at build time by
+  `alignGun()`: it samples the rig's `aim` pose and solves the palm-space quaternion that puts the barrel (per-gun `raw.barrel`) on the character's +Z
+  with the gun's +Y up — any rig / any gun without hand-tuned angles (`MOUNTS[charId]` can still override bone / offset / scale). The `muzzle`
+  Object3D sits at the barrel end of the gun bounds (measured before mounting) and carries the flash mesh; tracers start there.
+- **Aim / flinch bones:** `AIM_BONES` picks `Chest` (fallback `Torso`) for the player's aim pitch; enemies use the first of `FLINCH_BONES`
+  (`Chest, Torso, Root, Body`) as `bones.flinch`. Both go through `poseOffset(bone,axis,angle)` — see Layers.
+- **Layers.** `splitClip(clip,'lower'|'upper')` masks each clip by bone name: `LOWER_RE` (`Leg|Foot|Pole|Thigh|Shin|Toe|Hips|Piston|^Body$|^Root$`) is
+  locomotion, everything else is the upper body (cached per clip). The animator has three
+  slots: `play(name,fade,once,ts)` owns the whole body (jump, fall, die, sprint/walk/idle for Rushers, Warden, dummies) and
+  `layer(lower,upper,fade,onceUpper,tsLower,tsUpper)` runs a locomotion half (or `null` = legs at rest) under an aim/fire/attack half.
+  Switching modes fades the other slots out. `animator.current` reads `"walk|shoot"` or `"jump"`. A one-shot in any slot plays to its end and holds
+  its last pose even if the same request is repeated each step. **Never use `timeScale` 0** — `isRunning()` is false and the mixer stops writing it; use 0.02.
+- States: player → `roll` one-shot (Blink) / airborne = `jumpstart` one-shot at 2.4× for the first 0.32 s while rising, then `jumploop` / on touchdown after
+  ≥ 0.2 s of air `jumpland` one-shot at 1.8× (`player.landT` 0.55 s, dropped by any move/fire input) / `hit` one-shot on the upper body while `player.hitT` (not firing) /
+  firing + moving forward = `runshoot` / firing + strafing or backing = `runL|runR|runB` + `shoot` / firing standing = `shoot` / moving = `walk`
+  (`run` when sprinting, strafe clips by `inp.r` vs `inp.f`) / standing within 2.5 s of a shot (`player.aimT`) = `idle` legs + `aim` at 0.02× /
+  else `idle`.
+  Lancer drone → `idle` hover (+ sine bob), `shoot` one-shot; Rusher / dummy (Leela) → `run|walk|idle` full, `attack` (kick) one-shot;
+  Warden (QuadShell) → `charge` while charging, `attack` one-shot, `run|walk|idle`. Death: `removeEnemy(e,true)` plays `die` and parks the group in
+  `corpses[]` for the clip length + 0.4 s (max 2.6 s, sinks at the end).
+- **Procedural layers (after the mixer update):** the aim bone gets the pitch and the hit flinch (`player.flinch`, `e.hurt` — 120 ms) via
+  `poseOffset()` — the mixer only rewrites a bone when its blended value *changes*, so a held pose plus a naive `rotation.x -= a` per step accumulates;
+  `poseOffset` keeps the last mixer-written quaternion as the base and re-applies the offset from there;
+  the gun mesh inside its mount gets the recoil kick (`player.kick` → `gun.userData.kick.obj` rotation + push-back scaled by gun length);
+  `state.shake` (via `shakeCam(amp,dist)`) offsets the camera after `lookAt` unless `SETTINGS.shake` is off.
+- **Animation LOD:** an enemy farther than 25 m (14 m on low) accumulates `e.animAcc` and steps its mixer at 15 Hz; `perf.animLod` counts them per frame.
   Death: `removeEnemy(e,true)` strips the hit boxes, plays `die` once and parks the group in `corpses[]` for 1.4 s (sinks at the end).
-- Lobby pods and the menu backdrop run `idle` through `podAnims[]`.
+- Lobby pods (`podDisplays[]`: ring, obj, anim, head) run `idle` through `tickPods(dt,eye)`, which also returns a finished one-shot to idle and turns each
+  head bone toward `eye` (±0.9 rad, ignored when the viewer is behind). `updatePodRings(true)` plays the `jump` emote on the selected pod.
 
 ### Maps and stages (`19-world`, `19b-maps`)
 `clearWorld()` empties the `world` group and every registry, then a builder repopulates `boxes[]`, `colliderMeshes[]`,
@@ -106,8 +142,8 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 | `docs/` | Generated. **GitHub Pages site / PWA**: `index.html` (standalone + manifest link + SW registration + iOS metas), `manifest.webmanifest`, `sw.js` (cache version = bundle hash), icons, `.nojekyll`. |
 | `site/` | Hand-maintained PWA assets copied into `docs/` by the build (manifest, `sw.js` template, PNG icons). |
 | `test-local.html` | Generated. cdnjs script rewritten to `./node_modules/three/build/three.min.js` for headless tests. |
-| `test.js` … `test5.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages · models/settings/death anim). All wait for `MODELS.ready`. |
-| `tools/pack-assets.js`, `ATTRIBUTION.md` | asset packer (needs the Kenney `3d/` tree) and licences. |
+| `test.js` … `test6.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages · models/settings/death anim · animation layers/recoil/flinch/shake/LOD/pod emote). All wait for `MODELS.ready`. |
+| `tools/pack-quaternius.js`, `tools/retarget.js`, `ATTRIBUTION.md` | asset packer (needs `Assets/` with the Quaternius packs; `npm i @gltf-transform/core @gltf-transform/extensions @gltf-transform/functions sharp gl-matrix`) and licences. `tools/pack-assets.js` is the retired Kenney packer. |
 | `README.md` | Player-facing readme + GitHub Pages / install steps. |
 | `ROADMAP.md` | Phased plan; tick items there as they ship. |
 
@@ -122,27 +158,27 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | File | Contents |
 |---|---|
 | `00-prelude` | THREE presence check |
-| `05-gltfloader`, `06-assets`, `07-models` | inlined GLTFLoader + SkeletonUtils; packed `ASSET_DATA`; `loadModels`, `spawnCharacter`, `spawnProp`, `makeAnimator` |
+| `05-gltfloader`, `06-assets`, `07-models` | inlined GLTFLoader + SkeletonUtils; packed `ASSET_DATA`; `loadModels`, `spawnCharacter`, `spawnProp`, `splitClip`, `makeAnimator` (`play` / `layer` / `finished`) |
 | `11-constants`, `12-data-characters`, `13-data-items` | tuning constants, `CHARS[]` (abilities carry a `short` touch label), `ITEMS[]` |
 | `14-dom`, `15-persistence` | cached element handles (HUD + touch layer); `save.get/set` (localStorage `fa2.*`, try/catch) |
 | `16-audio` | `blip`, `noise`, `SFX`, single `master` GainNode |
 | `17-quality-tiers` | `TIERS` (high/medium/low: pixel ratio, shadows, fx density, fog, stars, AA), `detectTier()`, `IS_COARSE`, `Q` |
 | `18-renderer-scene` | renderer, lights, sky; `applyQuality(tier)`, `setQuality('auto'|tier)` |
-| `19-world` | `mergeGeos()`, `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits one mesh per material **and calls `navBuild()`**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildLobby/buildRange`, `addTarget` |
+| `19-world` | `mergeGeos()`, `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits one mesh per material **and calls `navBuild()`**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildLobby/buildRange`, `addTarget`, `podDisplays[]`, `updatePodRings(emote)`, `tickPods` |
 | `19b-maps` | `mapData`, `buildFoundry/buildRelay/buildFrost/buildReactor`, `MAPS[]`, `MODS[]`, `mulberry32`, `makeRunOrder(seed)`, `stageMap()`, `stageMod()` |
-| `20-player` | `player`, `run`, `computeStats()`, `GUN_MOUNT`, `buildAvatarModel(ch)` (glTF or `buildAvatarProcedural`), `rebuildAvatar()` (`avatarAnim`, `avatarBones`) |
+| `20-player` | `player` (incl. `kick`, `flinch`), `run`, `computeStats()`, `GUN_MOUNT`, `buildAvatarModel(ch)` (glTF or `buildAvatarProcedural`; sets `gun.userData.kick`), `rebuildAvatar()` (`avatarAnim`, `avatarBones`) |
 | `21-enemies` | `ENEMY_MODEL/ENEMY_TINT`, `corpses[]`, `makeEnemy` (glTF or `buildEnemyProcedural`) → `finishEnemy` (hit boxes, stats, `animator`, `attackT/shootT`), `removeEnemy(e,keepCorpse)`, `spawnDummy` |
 | `21b-nav` | `navBuild`, `navCell/navHeightAt/navOpenAt/navCentre/navNearestOpen`, `navPath` (A*), `navClear` (Bresenham), `navSteer(e,target,out,dt)` |
 | `22-effects` | **pools**: `TRACER_POOL` (48, geometry rewritten in place), `SPARK_POOL` (240, fade by scale, count × `Q.cfg.fx`), `PROJ_POOL` (160, no lights — `glowSprite()`), `dropPickup` |
 | `23-state` | `state` (`mode` ∈ menu/lobby/range/run), `rangeStats`, `keys` |
-| `23b-input-state` | `TOUCH` detection, **`SETTINGS`** (touch/mouse/pad sensitivity multipliers, volume, invert Y; `applySettings()`), `inp`, `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
+| `23b-input-state` | `TOUCH` detection, **`SETTINGS`** (touch/mouse/pad sensitivity multipliers, volume, invert Y, screen shake; `applySettings()`), `inp`, `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
 | `24-math-helpers` | scratch vectors (`_v1.._v3`, `_fwd`, `_camF`…), `forwardInto(out,…)`, `resolveXZ`, `supportHeight`, `lineOfSight` |
 | `25-hud-helpers` | `syncHUD` (ability, boss bar, touch button, stage), `syncCompass` (crates/items/boss/portal bearings), `syncItems`, `syncRange`, `setMode` |
 | `26-items`, `27-characters` | `giveItem(id)`, `selectChar(i, inLobby)` |
 | `28-waves` | `startWave` (boss on multiples of `BOSS_EVERY`, `e.mk = stage`), `spawnOne` (nav-snapped, Lancer share + swift mod), `waveCleared` (crate, bounty), **`bossDefeated`, `buildStage`, `nextStage`** |
 | `29-shooting` | `tryFire` (pellet loop, crit, range targets), `dealDamage`, `killEnemy`, `startReload` |
-| `30-abilities`, `31-damage` | `useAbility` (Blink uses `inp`), `hurtPlayer` (shield, i-frames, haptic) |
-| `32-loop` | `update(dt)` at a **fixed 60 Hz step**; order: input → timers → movement (ice, low-grav) → regen → avatar → camera → spinners/targets → interactables (run: portal) → enemies (`approach()` = straight inside 3 m else `navSteer`; ground-following; boss patterns by `mk`) → waves (paused while the portal is open) → reactor pulse → projectiles → pickups → fx; `perf`, auto-tier probe, debug overlay |
+| `30-abilities`, `31-damage` | `useAbility` (Blink uses `inp`), `shakeCam(amp,dist)`, `hurtPlayer` (shield, i-frames, haptic, flinch + shake) |
+| `32-loop` | `update(dt)` at a **fixed 60 Hz step**; order: input → timers (kick/flinch decay) → movement (ice, low-grav) → regen → avatar (layers + procedural) → pods → camera (+ shake) → spinners/targets → interactables (run: portal) → enemies (`approach()` = straight inside 3 m else `navSteer`; ground-following; animation LOD + layers + flinch; boss patterns by `mk`) → waves (paused while the portal is open) → reactor pulse → projectiles → pickups → fx; `perf`, auto-tier probe, debug overlay (2nd line = animation) |
 | `33-mode-transitions` | `resetPlayerFor`, `goLobby/goRange`, `goRun(seed?)` (seed from arg / `?seed=` / clock → `run.order`, `buildStage(1)`), `resumePlay()`, `enterPlay()` |
 | `34-input` | keyboard/mouse/pointer-lock; unlocking pauses (run/range) or opens the roster (lobby) |
 | `34b-touch` | pointer-event joystick (floating, 50 px radius), look-drag, held buttons with pointer capture, `syncTouchHUD()`; iOS scroll/zoom suppression |
@@ -171,7 +207,8 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 - Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`, 3.5 after a portal. Alive cap 16 in the spawn block (summons up to 20).
 - Nav: `NAV_STEP`, `NAV_RADIUS`, repath interval in `navSteer`, `maxExpand` 2500. Stage: `MODS[]` effects in `spawnOne`/`killEnemy`/`dropPickup`/movement; boss patterns in the boss branch; reactor `period` in `buildReactor`.
 - Touch: `TOUCH_SENS_BASE` 0.0085 × `SETTINGS.touchSens`; `MOUSE_SENS_BASE` 0.0022; `PAD_SENS_BASE` 2.8; `STICK_R`; aim-assist cone/pull in `aimAssist`.
-- Models: `CHAR_HEIGHT`, `GUN_MOUNT`, `ENEMY_TINT`, clip `timeScale` formulas in the loop, corpse time 1.4 s.
+- Models: per-model `height` in the packer `PICK`, `GUN_MOUNT` (scale 0.5) / `MOUNTS`, `GUN_AXIS` fallback, `player.aimT` 2.5 s / `hitT` 0.45 s / `rollT` 0.5 s / `landT` 0.55 s, jump-start window 0.32 s, `ENEMY_TINT`, `HOVER_Y`, emissive intensity 1.6 / colour cast 0.55 in `spawnCharacter`, clip `timeScale` formulas in the loop.
+- Feel: kick per shot in `tryFire` (0.6 / 0.85 / 1 by operative), decay `dt*7`; flinch decay `dt*8`, torso flinch gain 0.35 (player) / 3 (enemies, from `e.hurt`); shake amplitudes at each `shakeCam` call, decay `dt*3`, camera offset 0.14 / 0.10 m; LOD distance 25 m (14 m low), 15 Hz; head-look clamp ±0.9 rad in `tickPods`.
 - Quality: `TIERS` table; probe thresholds in `frame()`.
 - Camera/FOV: `dist=5.15`, offset `0.72`, FOV 66.
 
@@ -189,6 +226,7 @@ node test2.js   # aimed fire on the range, chaser damage, barrier, wave clear ->
 node test3.js   # touch: layer on, lobby without pointer lock, joystick moves, look-drag, FIRE/ability/pause buttons, aim assist drift
 node test4.js   # stages: nav grid per map, 3 Rushers close on the player on every map (incl. Relay platform top), portal -> next stage, Mk2 summons, reactor pulse
 node test5.js   # models parsed (13 items, 10 clips), settings sliders persist, enemies animate, kill -> corpse, draw calls
+node test6.js   # layers: runshoot while moving+firing, airborne = -|aim, runL / runB strafes, Blink = roll, hit = idle|hit, kick decays, Rusher melee one-shot, flinch, shake decays, LOD count, pod emote -> idle, heads found
 ```
 
 Launch flags: `--use-gl=swiftshader --enable-unsafe-swiftshader --no-sandbox`. Simulation is fixed-step, so results are
@@ -198,15 +236,17 @@ is active and `caches.keys()` lists `ferrous-<hash>` (three.js itself won't load
 
 `window.__ARENA__` exposes `{state, player, run, enemies, keys, camera, CHARS, ITEMS, computeStats, selectChar, giveItem,
 useAbility, goLobby, goRange, goRun, startWave, pickups, targets, interactables, perf, Q, setQuality, renderer, toggleDebug,
-inp, touch, pad, TOUCH, nav, MAPS, buildStage, nextStage, mapData, stageMap, navPath, navNearestOpen, bossDefeated, forceStart(mode)}`.
+inp, touch, pad, TOUCH, nav, MAPS, buildStage, nextStage, mapData, stageMap, navPath, navNearestOpen, bossDefeated, MODELS, SETTINGS,
+showSettings, spawnCharacter, GUN_MOUNT, avatar, podDisplays, avatarAnim(), corpses, forceStart(mode)}`.
 `forceStart('lobby'|'range'|'run')` bypasses pointer lock. `buildStage(n)` swaps the map without touching `state.stage`.
 
-Acceptance bar: `ERRORS: none` in all three, range `hits > 0`, player HP drops on chaser contact, a crate appears after a wave clear,
+Acceptance bar: `ERRORS: none` in all six, range `hits > 0`, player HP drops on chaser contact, a crate appears after a wave clear,
 `state.boss` is set on wave 5 and `pickups` gains 3 items when it dies, `perf` reports ≤ 140 draw calls at the alive cap,
 touch joystick moves the player and aim assist drifts yaw toward an off-centre target, and in `test4.js` every map's enemy
 distances fall over ~10 s with at least one enemy reaching `y=3` on Relay.
 
-Measured: ~70 draw calls / ~17k triangles with 16 glTF enemies (v2 was ~330 calls / 3.7k tris). Desktop: 120 fps at High on an RTX 5090 (v2.1).
+Measured (v2.7): ~110–126 draw calls / ~70k triangles with 16 enemies at the alive cap (v2.5 Kenney: ~70 / 17k; v2: ~330 / 3.7k); bundle 5.6 MB
+(assets 5.3 MB). Desktop: 120 fps at High on an RTX 5090 (v2.1 — re-check with the heavier meshes, press `). Phone: unmeasured.
 
 ---
 
@@ -214,15 +254,18 @@ Measured: ~70 draw calls / ~17k triangles with 16 glTF enemies (v2 was ~330 call
 
 Roughly in value order (details in `ROADMAP.md`):
 
-1. **Art direction is Kenney's toy style** (chibi Mini Characters, foam blasters) — the only rigged, animated CC0 set reachable from the build
-   sandbox. Swapping to sci-fi rigs later only needs new GLBs with the same bone names in `PICK`, or a different `GUN_MOUNT` per rig.
-2. **Animation layering is whole-body** — firing while running shows the shoot clip, not legs + upper body. `AnimationUtils.makeClipAdditive`
-   on an upper-body-masked shoot clip is the next step (roadmap phase 5).
-3. **Nav is 2.5D** — no overhangs/bridges you can walk under; enemies occasionally jostle each other off a stair for a moment (separation force).
-4. **Stage count is unbounded but only 4 maps** — stage 5 wraps to the shuffled order; more builders slot straight into `MAPS[]`.
-4. **Store wrappers not started** (2c): Capacitor project, Play/TestFlight builds — needs developer accounts and a Mac for iOS.
-5. **Phone verification pending** — touch was verified with Chromium touch emulation; a real Android/iOS pass is the phase 2 acceptance.
-6. **Alive cap still 16** — batching leaves headroom; profile on a phone before raising it.
+1. **Triangle budget moved up 4×** (mechs 6–9k tris, guns 3–9k, QuadShell 7.5k) and the bundle is 4.5 MB — profile on a phone before raising the
+   alive cap; `gltf-transform simplify` (meshopt) on the kit guns and a smaller `height` for far enemies are the cheap levers. Trilobite (kit) is packed
+   nowhere yet — it has a `Gun.L` bone and `AttackAuto`, a natural elite / second Lancer.
+2. **Jump is retargeted, not authored for this rig** — arms hold the UAL pose (no weapon) during the jump; the gun stays in the hand via the wrist. `Roll` doubles as Blink. The mech operatives (Mike/Stan/George) are no longer
+   packed; `MECH_CLIPS` and the Kenney packer remain for reference. The Universal Animation Library targets the UE mannequin rig, not these rigs.
+3. **Gun grip offset** is the wrist bone with no offset (`GUN_MOUNT.pos`); if a gun's grip floats, add a per-character `MOUNTS[id].pos` (metres, before
+   the rig scale).
+4. **Nav is 2.5D** — no overhangs/bridges you can walk under; enemies occasionally jostle each other off a stair for a moment (separation force).
+5. **Stage count is unbounded but only 4 maps** — stage 5 wraps to the shuffled order; more builders slot straight into `MAPS[]`.
+6. **Store wrappers not started** (2c): Capacitor project, Play/TestFlight builds — needs developer accounts and a Mac for iOS.
+7. **Phone verification pending** — touch was verified with Chromium touch emulation; a real Android/iOS pass is the phase 2 acceptance.
+8. **Alive cap still 16** — batching leaves headroom; profile on a phone before raising it.
 
 ---
 
@@ -234,5 +277,5 @@ Roughly in value order (details in `ROADMAP.md`):
 - Keep `arena.body.html` free of doctype/html/head/body tags — the Artifact tool supplies the skeleton.
 - No dynamic lights on transient objects (§4). Add lights only in map builders.
 - Loop code reads `inp`, never `keys`/`touch`/`pad` directly.
-- Never edit `src/06-assets.js` by hand; change `PICK` in `tools/pack-assets.js` and re-run it.
+- Never edit `src/06-assets.js` by hand; change `PICK` / clip maps / `MAPS` in `tools/pack-quaternius.js` and re-run it against `Assets/`.
 - Every map builder must end with `finalizeWorld()` (it bakes the nav grid) and must not leave anything the enemies need to walk under.

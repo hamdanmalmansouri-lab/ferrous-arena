@@ -2,7 +2,7 @@
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, alive:true, abCd:0, abActive:0, iframes:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, alive:true, abCd:0, abActive:0, iframes:0
 };
 const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
@@ -32,23 +32,28 @@ computeStats();
 const avatar=new THREE.Group(); scene.add(avatar);
 let gun=null, flash=null, flashMesh=null;
 /* glTF character + weapon; falls back to the procedural box model when models are unavailable */
-const GUN_MOUNT={pos:[-0.2,0.0,0.0],rot:[0,Math.PI/2,0],scale:1.0};   // arm-right bone space (raw units): the arm runs along local -X, barrel = gun -Z
-const CHAR_MODEL={vanguard:'char_vanguard',ranger:'char_ranger',bulwark:'char_bulwark'};
-const GUN_MODEL={vanguard:'gun_vanguard',ranger:'gun_ranger',bulwark:'gun_bulwark'};
+/* weapon mount in the right palm bone's space (metres, before the rig scale is divided out); tuned per mech in MOUNTS */
+const GUN_MOUNT={bone:'WristR',pos:[0,0,0],rot:[0,0,0],scale:0.5};   // Wrist.R (GLTFLoader strips the dot); the Sci-Fi Guns pack is modelled at ~2x the humans' scale
+const MOUNTS={};   // per character id overrides: {bone,pos,rot,scale}
+const CHAR_MODEL={vanguard:'human_swat',ranger:'human_scifi',bulwark:'human_space'};
+const GUN_MODEL={vanguard:'gun_ar',ranger:'gun_sniper',bulwark:'gun_cannon'};
+const AIM_BONES=['Chest','Torso','torso'];   // first present bone gets the aim pitch + flinch
 function buildAvatarModel(ch){
   if(MODELS.ok&&MODELS.items[CHAR_MODEL[ch.id]]){
-    const c=spawnCharacter(CHAR_MODEL[ch.id]); c.group.rotation.y=Math.PI;   // Kenney rigs face +Z; the game's forward is -Z
+    const c=spawnCharacter(CHAR_MODEL[ch.id]); c.group.rotation.y=MODEL_YAW;   // outfits keep their own palette
     const g=new THREE.Group(); g.add(c.group);
     const gunObj=new THREE.Group(); gunObj.name='gun';
-    const gunModel=spawnProp(GUN_MODEL[ch.id]); if(gunModel){ gunObj.add(gunModel); }
-    const arm=c.bones['arm-right'];
-    if(arm){ gunObj.position.fromArray(GUN_MOUNT.pos).divideScalar(c.scale); gunObj.rotation.fromArray(GUN_MOUNT.rot); gunObj.scale.setScalar(GUN_MOUNT.scale/c.scale); arm.add(gunObj); }
-    else { gunObj.position.set(.3,1.2,-.2); g.add(gunObj); }
-    /* muzzle: far end of the gun bounds along its barrel axis */
+    const gunModel=spawnProp(GUN_MODEL[ch.id],ch.color); const gunAxis=gunBarrel(GUN_MODEL[ch.id]);
+    /* gun models point their barrel along GUN_AXIS; measure the bounds while the model is still detached (identity space) */
     const muzzle=new THREE.Object3D(); muzzle.name='muzzle';
-    if(gunModel){ const b=new THREE.Box3().setFromObject(gunModel); const sz=b.getSize(new THREE.Vector3()); const axis=sz.z>=sz.x?'z':'x';
-      muzzle.position.set(axis==='x'?b.max.x:0,(b.min.y+b.max.y)/2+sz.y*0.15,axis==='z'?b.min.z:0); }
-    gunObj.add(muzzle);
+    if(gunModel){ const b=new THREE.Box3().setFromObject(gunModel); const sz=b.getSize(new THREE.Vector3()); const ctr=b.getCenter(new THREE.Vector3());
+      muzzle.position.copy(ctr); muzzle.position[gunAxis.axis]=gunAxis.sign>0?b.max[gunAxis.axis]:b.min[gunAxis.axis];
+      gunObj.userData.kick={obj:gunModel,len:sz[gunAxis.axis]||1,axis:gunAxis};   // recoil target: the gun mesh inside its mount
+      gunObj.add(gunModel); }
+    const mt=Object.assign({},GUN_MOUNT,MOUNTS[ch.id]||{}); const arm=c.bones[mt.bone];
+    if(arm){ gunObj.scale.setScalar(mt.scale/c.scale); arm.add(gunObj); alignGun(gunObj,arm,c,mt,gunAxis); }
+    else { gunObj.position.set(.3,1.2,-.2); g.add(gunObj); }
+    (gunModel||gunObj).add(muzzle);
     g.userData.animator=c.animator; g.userData.bones=c.bones; g.userData.model=true; g.userData.tw=.72; g.userData.muzzleZ=-1.1;
     return g;
   }
@@ -83,17 +88,40 @@ function buildAvatarProcedural(ch){
   g.userData.muzzleZ=-(bl*.66+(light?.7:.5))-.1; g.userData.tw=tw;
   return g;
 }
-let avatarAnim=null, avatarBones=null;
+/* Orient a weapon in a palm bone so its barrel (GUN_AXIS) points down the character's forward while the rig holds its
+   'shoot' pose, and its top faces up. Sampled once at build time, so any rig / any gun works without hand-tuned angles. */
+const _qa=new THREE.Quaternion(),_qb=new THREE.Quaternion(),_m4=new THREE.Matrix4();
+function gunBarrel(id){ const r=MODELS.items[id]; return (r&&r.raw&&r.raw.barrel)||GUN_AXIS; }   // packer-detected barrel axis, else the default
+function alignGun(gunObj,palm,c,mt,ax){
+  ax=ax||GUN_AXIS; const an=c.animator, shoot=an.actions.aim||an.actions.shoot;
+  if(shoot){ an.mixer.stopAllAction(); shoot.reset().play(); an.mixer.update(0.15); }   // a few frames into the shot pose
+  c.group.updateMatrixWorld(true);
+  palm.getWorldQuaternion(_qa); c.group.getWorldQuaternion(_qb);      // palm relative to the character root (which faces +Z in model space)
+  const rel=_qb.invert().multiply(_qa);                                //  = inv(root) * palm
+  /* target basis in root space: the barrel axis maps to +Z (model forward), gun +Y to up, the third axis follows */
+  const fwd=new THREE.Vector3(0,0,1), up=new THREE.Vector3(0,1,0);
+  let tx,ty=up.clone(),tz;
+  if(ax.axis==='x'){ tx=fwd.clone().multiplyScalar(ax.sign); tz=new THREE.Vector3().crossVectors(tx,ty); }
+  else { tz=fwd.clone().multiplyScalar(ax.sign); tx=new THREE.Vector3().crossVectors(ty,tz); }
+  _m4.makeBasis(tx,ty,tz); const qTarget=new THREE.Quaternion().setFromRotationMatrix(_m4);
+  gunObj.quaternion.copy(rel.invert().multiply(qTarget));              // local = inv(rel) * target
+  gunObj.position.fromArray(mt.pos).divideScalar(c.scale);
+  if(shoot){ an.mixer.stopAllAction(); }
+}
+/* rig facing: yaw applied to every character instance so the model looks down the game's -Z; GUN_AXIS: the kit guns' barrel direction in model space */
+const MODEL_YAW=Math.PI; const GUN_AXIS={axis:'x',sign:-1};
+let avatarAnim=null, avatarBones=null, avatarAimBone=null;
 function rebuildAvatar(){
   while(avatar.children.length)avatar.remove(avatar.children[0]);
   const m=buildAvatarModel(CH()); while(m.children.length){ avatar.add(m.children[0]); }
   gun=avatar.getObjectByName('gun'); avatarAnim=m.userData.animator||null; avatarBones=m.userData.bones||null;
+  avatarAimBone=null; if(avatarBones)for(const b of AIM_BONES)if(avatarBones[b]){ avatarAimBone=avatarBones[b]; break; }
   flash=new THREE.PointLight(0xffd08a,0,7,2); flash.position.set(0,1.3,-1.1); avatar.add(flash);
   flashMesh=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),new THREE.MeshBasicMaterial({color:0xffd9a0,transparent:true,opacity:0}));
   const muz=avatar.getObjectByName('muzzle');
   if(muz){ muz.add(flashMesh); flashMesh.position.set(0,0,0); }
   else { flashMesh.position.set(m.userData.tw*.61,1.28,m.userData.muzzleZ); avatar.add(flashMesh); }
-  if(avatarAnim)avatarAnim.play('holding-right',0);
+  if(avatarAnim)avatarAnim.play('idle',0);
   shieldMesh.visible=false; avatar.add(shieldMesh);
 }
 const shieldMesh=new THREE.Mesh(new THREE.SphereGeometry(1.25,20,14),new THREE.MeshBasicMaterial({color:0x6fe3ff,transparent:true,opacity:.22,wireframe:true}));

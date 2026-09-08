@@ -4,6 +4,6 @@ function selectChar(i,inLobby){
   run.charIdx=i; save.set('char',i);
   computeStats(); rebuildAvatar();
   player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.abCd=0; player.abActive=0; player.shield=0;
-  if(inLobby){ SFX.ui(); say('Operative: <b>'+CH().name+'</b>'); updatePodRings(); }
+  if(inLobby){ SFX.ui(); say('Operative: <b>'+CH().name+'</b>'); updatePodRings(true); }
   syncHUD();
 }
