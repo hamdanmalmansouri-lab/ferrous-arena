@@ -2,7 +2,7 @@
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, alive:true, abCd:0, abActive:0, iframes:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0
 };
 const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;

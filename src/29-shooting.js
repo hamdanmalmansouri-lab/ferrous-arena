@@ -23,7 +23,7 @@ function tryFire(){
   crossEl._t=setTimeout(()=>crossEl.classList.remove('wide'),110);
 
   const muzzle=new THREE.Vector3(); flashMesh.getWorldPosition(muzzle);
-  const baseSpread=s.spread+(inp.sprint?0.01:0)+(player.vel.lengthSq()>2?0.004:0);
+  const baseSpread=(s.spread+(inp.sprint?0.01:0)+(player.vel.lengthSq()>2?0.004:0))*(1-0.4*player.aimK);   // aiming tightens the cone
   const targetsAll=enemyHitMeshes.concat(targetHitMeshes,colliderMeshes);
   let anyHit=false;
   for(let p=0;p<s.pellets;p++){

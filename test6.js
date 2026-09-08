@@ -65,6 +65,24 @@ const path = require('path');
   if (r.hasClip && /reload/.test(r.after.state)) errors.push('RELOAD layer still active after the reload: ' + r.after.state);
   if (shim) r.note = 'packed reload clip absent - layer verified with a shim; repack with Pistol_Reload in UAL_CLIPS';
   console.log('reload layer:', JSON.stringify(r));
+  // free look + aim: idle mouse orbits the camera (yaw untouched), an action snaps yaw to the camera; RMB pulls the camera in
+  r = await page.evaluate(() => { const A = __ARENA__, p = A.player; p.orbit = 0; p.yaw = 0; return { free: p.free }; });
+  await page.evaluate(() => { __ARENA__.applyLook(1.0, 0); });
+  await page.waitForTimeout(150);
+  Object.assign(r, await page.evaluate(() => { const p = __ARENA__.player; return { orbit: +p.orbit.toFixed(2), yaw: +p.yaw.toFixed(2), camYaw: +__ARENA__.camYaw().toFixed(2), reticleDim: document.getElementById('cross').classList.contains('free') }; }));
+  await page.evaluate(() => { __ARENA__.keys.w = true; });
+  await page.waitForTimeout(150);
+  Object.assign(r, await page.evaluate(() => { const p = __ARENA__.player; return { orbitAfterMove: +p.orbit.toFixed(2), yawAfterMove: +p.yaw.toFixed(2) }; }));
+  await page.evaluate(() => { __ARENA__.keys.w = false; __ARENA__.keys.aim = true; });
+  await page.waitForTimeout(600);
+  Object.assign(r, await page.evaluate(() => ({ aimK: +__ARENA__.player.aimK.toFixed(2), fov: +__ARENA__.camera.fov.toFixed(1), aimState: __ARENA__.avatarAnim().current })));
+  await page.evaluate(() => { __ARENA__.keys.aim = false; });
+  await page.waitForTimeout(600);
+  r.fovReleased = +await page.evaluate(() => __ARENA__.camera.fov.toFixed(1));
+  if (!r.free || r.orbit !== -1 || r.yaw !== 0) errors.push('FREELOOK orbit did not take the look delta: ' + JSON.stringify(r));
+  if (r.orbitAfterMove !== 0 || r.yawAfterMove !== -1) errors.push('FREELOOK yaw did not snap to the camera on move: ' + JSON.stringify(r));
+  if (r.aimK < 0.9 || r.fov > 52 || !/aim$/.test(r.aimState) || r.fovReleased < 65) errors.push('AIM camera/pose wrong: ' + JSON.stringify(r));
+  console.log('free look + aim:', JSON.stringify(r));
   // enemies: rusher attack layered over sprint, hit flinch, shake on hurt, LOD for far enemies
   await page.evaluate(() => { const A = __ARENA__; A.state.startDelay = 0.01; });
   await page.waitForTimeout(1500);

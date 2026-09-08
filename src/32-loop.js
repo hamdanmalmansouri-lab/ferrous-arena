@@ -16,6 +16,12 @@ function update(dt){
     if(player.reloading<=0){ player.mag=s.mag; reloadbar.classList.remove('on'); reloadfill.style.width='0%'; }
   }
   pollGamepad(dt); readInput();
+  /* free look: idle = the mouse orbits the camera round the character; any action turns the character to face the camera */
+  const acting=inp.moving||inp.fire||inp.aim||inp.jump||(inp._auto&&touch.autoFire);
+  if(acting&&player.orbit!==0){ player.yaw+=player.orbit; player.orbit=0; }
+  player.free=!acting&&mode!=='menu';
+  player.aimK+=((inp.aim&&mode!=='lobby'?1:0)-player.aimK)*Math.min(1,dt*12);   // RMB aim: camera pulls in, FOV narrows, gun stays up
+  if(inp.aim)player.aimT=Math.max(player.aimT,0.3);
   if(TOUCH&&(inp.fire||autoFireCheck()))aimAssist(dt);
   if(inp.fire||(inp._auto&&touch.autoFire))tryFire();
 
@@ -71,6 +77,7 @@ function update(dt){
     else if(firing&&moving&&loco==='walk'||firing&&moving&&loco==='run')avatarAnim.play('runshoot',0.08,false,tsLo);   // dedicated run-and-gun clip
     else if(firing&&moving)avatarAnim.layer(loco,'shoot',0.08,false,tsLo,1);                   // strafing / backing while firing
     else if(firing)avatarAnim.play('shoot',0.08,false,1);
+    else if(moving&&inp.aim)avatarAnim.layer(loco,'aim',0.12,false,tsLo,0.02);                // walking while aiming: gun stays up
     else if(moving)avatarAnim.play(loco,0.12,false,tsLo);
     else if(player.aimT>0)avatarAnim.layer('idle','aim',0.15,false,1,0.02);                    // recently fired: stay on target (aim clip crawling — timeScale 0 stops the mixer writing it)
     else avatarAnim.play('idle',0.2,false,1);                                                  // Idle_Gun: weapon lowered
@@ -90,10 +97,12 @@ function update(dt){
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
 
   /* ---- camera ---- */
-  const camF=forwardInto(_camF,player.yaw,player.pitch+player.recoil);
+  const camF=forwardInto(_camF,camYaw(),player.pitch+player.recoil);
   const camR=_camR.crossVectors(camF,UP).normalize();
-  const pivot=_pivot.copy(player.pos); pivot.y+=EYE; pivot.addScaledVector(camR,0.72);
-  let dist=5.15;
+  const pivot=_pivot.copy(player.pos); pivot.y+=EYE; pivot.addScaledVector(camR,0.72+0.16*player.aimK);
+  let dist=5.15-1.95*player.aimK;
+  const fov=66-16*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
+  crossEl.classList.toggle('free',player.orbit!==0);
   ray.set(pivot,_v1.copy(camF).negate()); ray.far=dist+0.4;
   const cHits=ray.intersectObjects(colliderMeshes,false); ray.far=Infinity;
   if(cHits.length)dist=Math.max(1.1,cHits[0].distance-0.35);

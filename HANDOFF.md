@@ -18,7 +18,8 @@ geometry, WebAudio-synthesised sound and canvas-generated labels. If the packed 
 supply crate with an item after every wave → **Warden boss every 5 waves** (3 items on kill) → **stage portal** → new map with a
 modifier and a stronger Warden pattern → … → death → stats (seed shown, replayable) → redeploy.
 
-**Controls (desktop):** WASD move, mouse look (pointer lock), LMB hold to fire, **Q / RMB ability**, R reload, **E interact**,
+**Controls (desktop):** WASD move, mouse look (pointer lock), LMB hold to fire, **RMB aim** (camera in, FOV 66→50, spread ×0.6), **Q ability**, R reload,
+**free look** (mouse orbits the camera round the operative while idle; moving / firing / aiming turns the operative to the camera), **E interact**,
 Shift sprint, Space jump, **1/2/3 swap operative in the lobby**, Esc / Tab menu, ` performance overlay.
 **Touch:** left half drag = floating joystick (push far = sprint), right half drag = look, FIRE / ability / JUMP / R buttons,
 interact pill, pause button. Aim assist on by default, optional auto-fire (menu toggles).

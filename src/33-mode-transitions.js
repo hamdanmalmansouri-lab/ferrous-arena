@@ -1,6 +1,6 @@
 /* ============================ mode transitions ============================ */
 function resetPlayerFor(mode,pos){
-  player.pos.copy(pos); player.vel.set(0,0,0); player.yaw=0; player.pitch=-0.06;
+  player.pos.copy(pos); player.vel.set(0,0,0); player.yaw=0; player.pitch=-0.06; player.orbit=0; player.aimK=0;
   player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.reloading=0; player.recoil=0; player.lastHurt=99;
   player.alive=true; player.abCd=0; player.abActive=0; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');

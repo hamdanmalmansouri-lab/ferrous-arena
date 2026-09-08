@@ -7,7 +7,7 @@ const TOUCH=(function(){
   const pts=navigator.maxTouchPoints||0, fine=!!(window.matchMedia&&matchMedia('(pointer:fine)').matches);
   return pts>0&&!fine;
 })();
-const inp={f:0,r:0,fire:false,sprint:false,jump:false,moving:false};
+const inp={f:0,r:0,fire:false,sprint:false,jump:false,moving:false,aim:false};
 const touch={active:false,move:{x:0,y:0,len:0},fire:false,jump:false,stickId:null,lookId:null,lookX:0,lookY:0,
              assist:true,autoFire:false,sens:0.0045};
 const pad={connected:false,prev:[],fire:false,f:0,r:0,sprint:false,jump:false};
@@ -20,7 +20,7 @@ touch.autoFire=!!AUTO_FIRE; touch.assist=AIM_ASSIST!==false; applySettings();
 
 function readInput(){
   inp.f=(keys.w?1:0)-(keys.s?1:0); inp.r=(keys.d?1:0)-(keys.a?1:0);
-  inp.fire=!!keys.mouse; inp.sprint=!!(keys.shift&&keys.w); inp.jump=!!keys.space;
+  inp.fire=!!keys.mouse; inp.sprint=!!(keys.shift&&keys.w&&!keys.aim); inp.jump=!!keys.space; inp.aim=!!keys.aim;
   if(TOUCH&&touch.active){
     if(touch.move.len>0.08){ inp.f=touch.move.y; inp.r=touch.move.x; inp.sprint=touch.move.len>0.85&&touch.move.y>0.4; }
     inp.fire=inp.fire||touch.fire; inp.jump=inp.jump||touch.jump;
@@ -33,6 +33,14 @@ function readInput(){
   inp.moving=m>0.05;
   return inp;
 }
+/* look delta from any source. Idle (player.free: not moving / firing / aiming) orbits the camera round the character so you can
+   see them from the front; otherwise it turns the character. The loop snaps yaw to the camera when an action starts. */
+function applyLook(dx,dy){
+  if(player.free)player.orbit-=dx; else player.yaw-=dx;
+  player.pitch-=dy*(SETTINGS.invertY?-1:1); player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
+}
+/* camera yaw = character yaw + orbit */
+function camYaw(){ return player.yaw+player.orbit; }
 
 /* ---- gamepad (polled once per step) ---- */
 const PAD_DEAD=0.18;
@@ -47,7 +55,7 @@ function pollGamepad(dt){
   if(lm>PAD_DEAD){ const k=(lm-PAD_DEAD)/(1-PAD_DEAD)/lm; pad.f=-ly*k; pad.r=lx*k; pad.sprint=lm>0.92; } else { pad.f=pad.r=0; pad.sprint=false; }
   const rm=Math.hypot(rx,ry);
   if(rm>PAD_DEAD&&state.running){ const k=(rm-PAD_DEAD)/(1-PAD_DEAD); const curve=k*k*PAD_SENS_BASE*SETTINGS.padSens;
-    player.yaw-=rx/rm*curve*dt; player.pitch-=ry/rm*curve*0.7*dt*(SETTINGS.invertY?-1:1); player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch)); }
+    applyLook(rx/rm*curve*dt,ry/rm*curve*0.7*dt); }
   const pressed=i=>!!(b[i]&&(b[i].pressed||b[i].value>0.5));
   const edge=i=>{ const now=pressed(i), was=!!pad.prev[i]; pad.prev[i]=now; return now&&!was; };
   pad.fire=pressed(7);                              // RT
@@ -64,7 +72,7 @@ function pollGamepad(dt){
 const _assistDir=new THREE.Vector3(), _assistTo=new THREE.Vector3();
 function aimAssist(dt){
   if(!TOUCH||!touch.assist||state.mode==='lobby')return;
-  forwardInto(_assistDir,player.yaw,player.pitch);
+  forwardInto(_assistDir,camYaw(),player.pitch);
   let best=null,bestAng=0.07;                        // ~4 degrees
   for(let i=0;i<enemies.length;i++){
     const e=enemies[i]; if(e.dead)continue;

@@ -19,6 +19,7 @@
   #cross.wide i:nth-child(1){top:-5px}#cross.wide i:nth-child(2){bottom:-5px}
   #cross.wide i:nth-child(3){left:-5px}#cross.wide i:nth-child(4){right:-5px}
   #cross i{transition:all .09s ease-out}
+  #cross.free{opacity:.25}   /* free look: the reticle is not where the gun points */
   #hitmark{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%) rotate(45deg);opacity:0}
   #hitmark b{position:absolute;background:#fff;border-radius:1px}
   #hitmark b:nth-child(1){left:15.5px;top:0;width:3px;height:11px}

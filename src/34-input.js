@@ -32,24 +32,22 @@ addEventListener('keyup',e=>{
   if(k==='shift')keys.shift=false;
   if(k===' ')keys.space=false;
 });
-addEventListener('mousedown',e=>{ if(!pointerLocked)return; if(e.button===0)keys.mouse=true; if(e.button===2)useAbility(); });
-addEventListener('mouseup',e=>{ if(e.button===0)keys.mouse=false; });
+addEventListener('mousedown',e=>{ if(!pointerLocked)return; if(e.button===0)keys.mouse=true; if(e.button===2)keys.aim=true; });   // RMB = aim (ability is Q)
+addEventListener('mouseup',e=>{ if(e.button===0)keys.mouse=false; if(e.button===2)keys.aim=false; });
 addEventListener('contextmenu',e=>{ if(pointerLocked)e.preventDefault(); });
-addEventListener('blur',()=>{ keys.w=keys.a=keys.s=keys.d=keys.shift=keys.mouse=keys.space=false; });
+addEventListener('blur',()=>{ keys.w=keys.a=keys.s=keys.d=keys.shift=keys.mouse=keys.space=keys.aim=false; });
 
 addEventListener('mousemove',e=>{
   if(!pointerLocked)return;
   const SENS=MOUSE_SENS_BASE*SETTINGS.mouseSens;
-  player.yaw-=e.movementX*SENS;
-  player.pitch-=e.movementY*SENS*(SETTINGS.invertY?-1:1);
-  player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
+  applyLook(e.movementX*SENS,e.movementY*SENS);
 });
 document.addEventListener('pointerlockchange',()=>{
   pointerLocked=(document.pointerLockElement===canvas);
   if(pointerLocked){
     if(!state.over&&state.mode!=='menu')resumePlay();
   }else{
-    keys.mouse=false;
+    keys.mouse=false; keys.aim=false;
     if(state.running&&!state.over){ state.running=false; if(state.mode==='lobby')showLobbyPanel(); else showPause(); }
   }
 });

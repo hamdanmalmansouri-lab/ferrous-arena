@@ -32,12 +32,13 @@ const path = require('path');
   const after = await page.evaluate(() => __ARENA__.player.pos.clone().toArray());
   console.log('moved:', before.map(v => +v.toFixed(2)), '->', after.map(v => +v.toFixed(2)));
   // look drag on right zone
-  const yaw0 = await page.evaluate(() => __ARENA__.player.yaw);
+  const yaw0 = await page.evaluate(() => __ARENA__.camYaw());   // camera yaw: an idle drag orbits the camera (free look), the operative keeps its yaw
   await pe('pointerdown', 'zoneR', 2, 700, 200);
   await pe('pointermove', null, 2, 600, 200);
   await pe('pointerup', null, 2, 600, 200);
-  const yaw1 = await page.evaluate(() => __ARENA__.player.yaw);
-  console.log('look drag yaw:', yaw0.toFixed(3), '->', yaw1.toFixed(3));
+  const yaw1 = await page.evaluate(() => __ARENA__.camYaw());
+  console.log('look drag cam yaw:', yaw0.toFixed(3), '->', yaw1.toFixed(3));
+  if (Math.abs(yaw1 - yaw0) < 0.1) errors.push('TOUCH look-drag did not move the camera');
   // go to range and hold FIRE
   await page.evaluate(() => __ARENA__.goRange());
   await page.waitForTimeout(300);

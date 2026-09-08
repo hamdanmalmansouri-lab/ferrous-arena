@@ -7,7 +7,8 @@ function controlsHTML(){
    '<div><span>Move</span><b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b></div>'+
    '<div><span>Look / aim</span><b>Mouse</b></div>'+
    '<div><span>Fire</span><b>Left click (hold)</b></div>'+
-   '<div><span>Ability</span><b><kbd>Q</kbd> / Right click</b></div>'+
+   '<div><span>Aim / free look</span><b>Right click / idle mouse</b></div>'+
+   '<div><span>Ability</span><b><kbd>Q</kbd></b></div>'+
    '<div><span>Reload</span><b><kbd>R</kbd></b></div>'+
    '<div><span>Interact</span><b><kbd>E</kbd></b></div>'+
    '<div><span>Sprint / Jump</span><b><kbd>Shift</kbd> <kbd>Space</kbd></b></div>'+

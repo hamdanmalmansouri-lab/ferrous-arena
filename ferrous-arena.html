@@ -29,6 +29,7 @@
   #cross.wide i:nth-child(1){top:-5px}#cross.wide i:nth-child(2){bottom:-5px}
   #cross.wide i:nth-child(3){left:-5px}#cross.wide i:nth-child(4){right:-5px}
   #cross i{transition:all .09s ease-out}
+  #cross.free{opacity:.25}   /* free look: the reticle is not where the gun points */
   #hitmark{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%) rotate(45deg);opacity:0}
   #hitmark b{position:absolute;background:#fff;border-radius:1px}
   #hitmark b:nth-child(1){left:15.5px;top:0;width:3px;height:11px}
@@ -5118,7 +5119,7 @@ function stageMod(stage){ return stage<2?null:MODS.find(m=>m.id===run.order.mods
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, alive:true, abCd:0, abActive:0, iframes:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0
 };
 const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
@@ -5554,7 +5555,7 @@ const TOUCH=(function(){
   const pts=navigator.maxTouchPoints||0, fine=!!(window.matchMedia&&matchMedia('(pointer:fine)').matches);
   return pts>0&&!fine;
 })();
-const inp={f:0,r:0,fire:false,sprint:false,jump:false,moving:false};
+const inp={f:0,r:0,fire:false,sprint:false,jump:false,moving:false,aim:false};
 const touch={active:false,move:{x:0,y:0,len:0},fire:false,jump:false,stickId:null,lookId:null,lookX:0,lookY:0,
              assist:true,autoFire:false,sens:0.0045};
 const pad={connected:false,prev:[],fire:false,f:0,r:0,sprint:false,jump:false};
@@ -5567,7 +5568,7 @@ touch.autoFire=!!AUTO_FIRE; touch.assist=AIM_ASSIST!==false; applySettings();
 
 function readInput(){
   inp.f=(keys.w?1:0)-(keys.s?1:0); inp.r=(keys.d?1:0)-(keys.a?1:0);
-  inp.fire=!!keys.mouse; inp.sprint=!!(keys.shift&&keys.w); inp.jump=!!keys.space;
+  inp.fire=!!keys.mouse; inp.sprint=!!(keys.shift&&keys.w&&!keys.aim); inp.jump=!!keys.space; inp.aim=!!keys.aim;
   if(TOUCH&&touch.active){
     if(touch.move.len>0.08){ inp.f=touch.move.y; inp.r=touch.move.x; inp.sprint=touch.move.len>0.85&&touch.move.y>0.4; }
     inp.fire=inp.fire||touch.fire; inp.jump=inp.jump||touch.jump;
@@ -5580,6 +5581,14 @@ function readInput(){
   inp.moving=m>0.05;
   return inp;
 }
+/* look delta from any source. Idle (player.free: not moving / firing / aiming) orbits the camera round the character so you can
+   see them from the front; otherwise it turns the character. The loop snaps yaw to the camera when an action starts. */
+function applyLook(dx,dy){
+  if(player.free)player.orbit-=dx; else player.yaw-=dx;
+  player.pitch-=dy*(SETTINGS.invertY?-1:1); player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
+}
+/* camera yaw = character yaw + orbit */
+function camYaw(){ return player.yaw+player.orbit; }
 
 /* ---- gamepad (polled once per step) ---- */
 const PAD_DEAD=0.18;
@@ -5594,7 +5603,7 @@ function pollGamepad(dt){
   if(lm>PAD_DEAD){ const k=(lm-PAD_DEAD)/(1-PAD_DEAD)/lm; pad.f=-ly*k; pad.r=lx*k; pad.sprint=lm>0.92; } else { pad.f=pad.r=0; pad.sprint=false; }
   const rm=Math.hypot(rx,ry);
   if(rm>PAD_DEAD&&state.running){ const k=(rm-PAD_DEAD)/(1-PAD_DEAD); const curve=k*k*PAD_SENS_BASE*SETTINGS.padSens;
-    player.yaw-=rx/rm*curve*dt; player.pitch-=ry/rm*curve*0.7*dt*(SETTINGS.invertY?-1:1); player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch)); }
+    applyLook(rx/rm*curve*dt,ry/rm*curve*0.7*dt); }
   const pressed=i=>!!(b[i]&&(b[i].pressed||b[i].value>0.5));
   const edge=i=>{ const now=pressed(i), was=!!pad.prev[i]; pad.prev[i]=now; return now&&!was; };
   pad.fire=pressed(7);                              // RT
@@ -5611,7 +5620,7 @@ function pollGamepad(dt){
 const _assistDir=new THREE.Vector3(), _assistTo=new THREE.Vector3();
 function aimAssist(dt){
   if(!TOUCH||!touch.assist||state.mode==='lobby')return;
-  forwardInto(_assistDir,player.yaw,player.pitch);
+  forwardInto(_assistDir,camYaw(),player.pitch);
   let best=null,bestAng=0.07;                        // ~4 degrees
   for(let i=0;i<enemies.length;i++){
     const e=enemies[i]; if(e.dead)continue;
@@ -5902,7 +5911,7 @@ function tryFire(){
   crossEl._t=setTimeout(()=>crossEl.classList.remove('wide'),110);
 
   const muzzle=new THREE.Vector3(); flashMesh.getWorldPosition(muzzle);
-  const baseSpread=s.spread+(inp.sprint?0.01:0)+(player.vel.lengthSq()>2?0.004:0);
+  const baseSpread=(s.spread+(inp.sprint?0.01:0)+(player.vel.lengthSq()>2?0.004:0))*(1-0.4*player.aimK);   // aiming tightens the cone
   const targetsAll=enemyHitMeshes.concat(targetHitMeshes,colliderMeshes);
   let anyHit=false;
   for(let p=0;p<s.pellets;p++){
@@ -6022,6 +6031,12 @@ function update(dt){
     if(player.reloading<=0){ player.mag=s.mag; reloadbar.classList.remove('on'); reloadfill.style.width='0%'; }
   }
   pollGamepad(dt); readInput();
+  /* free look: idle = the mouse orbits the camera round the character; any action turns the character to face the camera */
+  const acting=inp.moving||inp.fire||inp.aim||inp.jump||(inp._auto&&touch.autoFire);
+  if(acting&&player.orbit!==0){ player.yaw+=player.orbit; player.orbit=0; }
+  player.free=!acting&&mode!=='menu';
+  player.aimK+=((inp.aim&&mode!=='lobby'?1:0)-player.aimK)*Math.min(1,dt*12);   // RMB aim: camera pulls in, FOV narrows, gun stays up
+  if(inp.aim)player.aimT=Math.max(player.aimT,0.3);
   if(TOUCH&&(inp.fire||autoFireCheck()))aimAssist(dt);
   if(inp.fire||(inp._auto&&touch.autoFire))tryFire();
 
@@ -6077,6 +6092,7 @@ function update(dt){
     else if(firing&&moving&&loco==='walk'||firing&&moving&&loco==='run')avatarAnim.play('runshoot',0.08,false,tsLo);   // dedicated run-and-gun clip
     else if(firing&&moving)avatarAnim.layer(loco,'shoot',0.08,false,tsLo,1);                   // strafing / backing while firing
     else if(firing)avatarAnim.play('shoot',0.08,false,1);
+    else if(moving&&inp.aim)avatarAnim.layer(loco,'aim',0.12,false,tsLo,0.02);                // walking while aiming: gun stays up
     else if(moving)avatarAnim.play(loco,0.12,false,tsLo);
     else if(player.aimT>0)avatarAnim.layer('idle','aim',0.15,false,1,0.02);                    // recently fired: stay on target (aim clip crawling — timeScale 0 stops the mixer writing it)
     else avatarAnim.play('idle',0.2,false,1);                                                  // Idle_Gun: weapon lowered
@@ -6096,10 +6112,12 @@ function update(dt){
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
 
   /* ---- camera ---- */
-  const camF=forwardInto(_camF,player.yaw,player.pitch+player.recoil);
+  const camF=forwardInto(_camF,camYaw(),player.pitch+player.recoil);
   const camR=_camR.crossVectors(camF,UP).normalize();
-  const pivot=_pivot.copy(player.pos); pivot.y+=EYE; pivot.addScaledVector(camR,0.72);
-  let dist=5.15;
+  const pivot=_pivot.copy(player.pos); pivot.y+=EYE; pivot.addScaledVector(camR,0.72+0.16*player.aimK);
+  let dist=5.15-1.95*player.aimK;
+  const fov=66-16*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
+  crossEl.classList.toggle('free',player.orbit!==0);
   ray.set(pivot,_v1.copy(camF).negate()); ray.far=dist+0.4;
   const cHits=ray.intersectObjects(colliderMeshes,false); ray.far=Infinity;
   if(cHits.length)dist=Math.max(1.1,cHits[0].distance-0.35);
@@ -6353,7 +6371,7 @@ function toggleDebug(){ dbgOn=!dbgOn; dbgEl.classList.toggle('on',dbgOn); }
 /* ---- 33-mode-transitions.js ---- */
 /* ============================ mode transitions ============================ */
 function resetPlayerFor(mode,pos){
-  player.pos.copy(pos); player.vel.set(0,0,0); player.yaw=0; player.pitch=-0.06;
+  player.pos.copy(pos); player.vel.set(0,0,0); player.yaw=0; player.pitch=-0.06; player.orbit=0; player.aimK=0;
   player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.reloading=0; player.recoil=0; player.lastHurt=99;
   player.alive=true; player.abCd=0; player.abActive=0; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');
@@ -6423,24 +6441,22 @@ addEventListener('keyup',e=>{
   if(k==='shift')keys.shift=false;
   if(k===' ')keys.space=false;
 });
-addEventListener('mousedown',e=>{ if(!pointerLocked)return; if(e.button===0)keys.mouse=true; if(e.button===2)useAbility(); });
-addEventListener('mouseup',e=>{ if(e.button===0)keys.mouse=false; });
+addEventListener('mousedown',e=>{ if(!pointerLocked)return; if(e.button===0)keys.mouse=true; if(e.button===2)keys.aim=true; });   // RMB = aim (ability is Q)
+addEventListener('mouseup',e=>{ if(e.button===0)keys.mouse=false; if(e.button===2)keys.aim=false; });
 addEventListener('contextmenu',e=>{ if(pointerLocked)e.preventDefault(); });
-addEventListener('blur',()=>{ keys.w=keys.a=keys.s=keys.d=keys.shift=keys.mouse=keys.space=false; });
+addEventListener('blur',()=>{ keys.w=keys.a=keys.s=keys.d=keys.shift=keys.mouse=keys.space=keys.aim=false; });
 
 addEventListener('mousemove',e=>{
   if(!pointerLocked)return;
   const SENS=MOUSE_SENS_BASE*SETTINGS.mouseSens;
-  player.yaw-=e.movementX*SENS;
-  player.pitch-=e.movementY*SENS*(SETTINGS.invertY?-1:1);
-  player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
+  applyLook(e.movementX*SENS,e.movementY*SENS);
 });
 document.addEventListener('pointerlockchange',()=>{
   pointerLocked=(document.pointerLockElement===canvas);
   if(pointerLocked){
     if(!state.over&&state.mode!=='menu')resumePlay();
   }else{
-    keys.mouse=false;
+    keys.mouse=false; keys.aim=false;
     if(state.running&&!state.over){ state.running=false; if(state.mode==='lobby')showLobbyPanel(); else showPause(); }
   }
 });
@@ -6484,8 +6500,7 @@ if(TOUCH){
       stickEl.firstElementChild.style.transform='translate('+dx+'px,'+dy+'px)';
     }else if(e.pointerId===touch.lookId&&state.running){
       const dx=e.clientX-touch.lookX, dy=e.clientY-touch.lookY; touch.lookX=e.clientX; touch.lookY=e.clientY;
-      player.yaw-=dx*touch.sens; player.pitch-=dy*touch.sens*0.85*(SETTINGS.invertY?-1:1);
-      player.pitch=Math.max(-0.95,Math.min(0.72,player.pitch));
+      applyLook(dx*touch.sens,dy*touch.sens*0.85);
     }
   },{passive:true});
   const endPtr=e=>{
@@ -6516,7 +6531,8 @@ function controlsHTML(){
    '<div><span>Move</span><b><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></b></div>'+
    '<div><span>Look / aim</span><b>Mouse</b></div>'+
    '<div><span>Fire</span><b>Left click (hold)</b></div>'+
-   '<div><span>Ability</span><b><kbd>Q</kbd> / Right click</b></div>'+
+   '<div><span>Aim / free look</span><b>Right click / idle mouse</b></div>'+
+   '<div><span>Ability</span><b><kbd>Q</kbd></b></div>'+
    '<div><span>Reload</span><b><kbd>R</kbd></b></div>'+
    '<div><span>Interact</span><b><kbd>E</kbd></b></div>'+
    '<div><span>Sprint / Jump</span><b><kbd>Shift</kbd> <kbd>Space</kbd></b></div>'+
@@ -6644,7 +6660,7 @@ resize(); syncHUD();
 card.className='card'; card.innerHTML='<h1>Ferrous <span>Arena</span></h1><div class="tag">Loading models</div><div id="ldbar" style="height:6px;margin-top:22px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden"><div id="ldfill" style="height:100%;width:0;background:var(--accent);transition:width .15s"></div></div>';
 requestAnimationFrame(frame);
 loadModels(p=>{ const f=document.getElementById('ldfill'); if(f)f.style.width=(p*100).toFixed(0)+'%'; }).then(()=>{ rebuildAvatar(); showMenu(); });
-window.__ARENA__={state:state,player:player,run:run,enemies:enemies,keys:keys,camera:camera,CHARS:CHARS,ITEMS:ITEMS,
+window.__ARENA__={applyLook:applyLook,camYaw:camYaw,state:state,player:player,run:run,enemies:enemies,keys:keys,camera:camera,CHARS:CHARS,ITEMS:ITEMS,
   computeStats:computeStats,selectChar:selectChar,giveItem:giveItem,useAbility:useAbility,goLobby:goLobby,goRange:goRange,goRun:goRun,
   startWave:startWave,pickups:pickups,targets:targets,interactables:interactables,perf:perf,Q:Q,setQuality:setQuality,renderer:renderer,toggleDebug:toggleDebug,inp:inp,touch:touch,pad:pad,TOUCH:TOUCH,nav:nav,MAPS:MAPS,buildStage:buildStage,nextStage:nextStage,mapData:mapData,stageMap:stageMap,navPath:navPath,navNearestOpen:navNearestOpen,bossDefeated:bossDefeated,MODELS:MODELS,SETTINGS:SETTINGS,showSettings:showSettings,spawnCharacter:spawnCharacter,GUN_MOUNT:GUN_MOUNT,avatar:avatar,podDisplays:podDisplays,makeEnemy:makeEnemy,avatarAnim:function(){return avatarAnim;},corpses:corpses,
   forceStart:function(mode){ audio(); (mode==='lobby'?goLobby:mode==='range'?goRange:goRun)(); state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); }};
