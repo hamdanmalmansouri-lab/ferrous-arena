@@ -189,6 +189,7 @@ Known gaps carried forward: no store wrappers; phone load time / frame rate unme
 - [x] **Procedural layers:** recoil kick on fire, camera shake on boss burst/charge, hit-flinch via a 120 ms torso pose, ragdoll-free death (play clip, sink through the floor).
 - [x] **Dummies in the range** cycle idle/walk and flinch on hit so animation can be tested without a live fight; the debug overlay (`) shows the avatar's layer state, active mixers and LOD count.
 - [x] **Mobile budget:** ≤ 20 mixers active (alive cap); enemies beyond 25 m update animation at 15 Hz *(instanced crowd / VAT deferred with the alive cap)*.
+- [x] **Free look + aim (v2.7.2):** idle mouse / touch drag orbits the camera round the operative (see them from the front); moving, firing, jumping or aiming snaps the operative to the camera; RMB aim pulls the camera in over the shoulder (FOV 66→50, spread ×0.6, gun held up even while walking).
 - [x] **Lobby polish:** pod displays play idle + a jump emote when selected; pod heads look toward the camera (menu backdrop and lobby).
 
 **AC:** no visible foot sliding at walk/run speeds (clip `timeScale` follows speed — **eyeball on desktop**); firing while sprinting shows both layers ✅ (`test6.js`: `sprint|holding-right-shoot`); every actor has a death animation ✅; frame budget from phase 1 still met ✅ desktop (73 calls at the cap) — **phone still unmeasured**. Open: 2nd death variant and crouch (UAL `Death01`, `Crouch_*`); reload/strafe/hit shipped with the Quaternius swap.
