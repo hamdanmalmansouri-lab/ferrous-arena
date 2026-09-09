@@ -1,17 +1,17 @@
-17:32:24 | INFO: Data are loaded, start creating Blender stuff
-17:32:24 | INFO: Blender create Mesh node Cube.002
-17:32:24 | INFO: Blender create Mesh node Cube.047
-17:32:24 | INFO: Blender create Mesh node Cube.049
-17:32:24 | INFO: Blender create Mesh node Cube.046
-17:32:24 | INFO: glTF import finished in 0.21s
+17:46:43 | INFO: Data are loaded, start creating Blender stuff
+17:46:44 | INFO: Blender create Mesh node Cube.002
+17:46:44 | INFO: Blender create Mesh node Cube.047
+17:46:44 | INFO: Blender create Mesh node Cube.049
+17:46:44 | INFO: Blender create Mesh node Cube.046
+17:46:44 | INFO: glTF import finished in 0.21s
 scaling mesh 1.660 m -> 1.664 m (x1.0024)
 INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
 INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
-17:32:25 | INFO: Starting glTF 2.0 export
-17:32:25 | INFO: Extracting primitive: BulwarkBody
-17:32:25 | INFO: Primitives created: 3
-17:32:25 | WARNING: There are more than 4 joint vertex influences.The 4 with highest weight will be used (and normalized).
-17:32:27 | INFO: Finished glTF 2.0 export in 2.129080057144165 s
+17:46:44 | INFO: Starting glTF 2.0 export
+17:46:44 | INFO: Extracting primitive: BulwarkBody
+17:46:44 | INFO: Primitives created: 3
+17:46:44 | WARNING: There are more than 4 joint vertex influences.The 4 with highest weight will be used (and normalized).
+17:46:46 | INFO: Finished glTF 2.0 export in 2.1043450832366943 s
 
 ============================================================
 OUT       Assets\custom\bulwark\bulwark.gltf
@@ -21,6 +21,6 @@ clips     24 : Death,Gun_Shoot,HitRecieve,HitRecieve_2,Idle,Idle_Gun,Idle_Gun_Po
 unweighted vertices 0 (must be 0 — any non-zero means a limb will not move)
 ============================================================
 Blender 5.2.1 LTS (hash 9e2066aef7ef built 2026-08-25 02:38:20)
-OBJ import of 'bulwark.obj' took 9.75 ms
+OBJ import of 'bulwark.obj' took 2.08 ms
 
 Blender quit
