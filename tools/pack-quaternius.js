@@ -36,7 +36,6 @@ const PICK={
   human_scifi: {file:path.join(FEM,'SciFi.gltf'),      pack:'human', clips:HUMAN_CLIPS, height:1.76, drop:['Pistol'], bakeFingers:true, ual:UAL_CLIPS},
   human_space: {file:path.join(MALE,'Spacesuit.gltf'), pack:'human', clips:HUMAN_CLIPS, height:1.9,  drop:['Pistol'], bakeFingers:true, ual:UAL_CLIPS},
   mech_leela: {file:path.join(MECH,'Leela.gltf'),  pack:'mech',   clips:LEELA_CLIPS, height:1.6},
-  custom_bulwark: {file:path.join(CUSTOM,'bulwark','bulwark.gltf'), pack:'mech', clips:HUMAN_CLIPS, height:1.9, bakeFingers:true, ual:UAL_CLIPS},
   /* --- your own characters -------------------------------------------------------------------------
      Built by:  blender --background --python tools/blender/rig_character.py -- \
                   --mesh Assets/custom/<id>/<id>.obj --donor "Assets/Modular male/Individual Characters/glTF/Swat.gltf" \

@@ -10,7 +10,10 @@ let js=fs.readdirSync(SRC).filter(f=>/^\d\d[a-z]?-.*\.js$/.test(f)).sort()
   .map(f=>'/* ---- '+f+' ---- */\n'+fs.readFileSync(path.join(SRC,f),'utf8')).join('\n');
 
 /* ---- beta-only swaps ------------------------------------------------------ */
-const SWAPS=[["bulwark:'human_space'","bulwark:'custom_bulwark'"]];
+// Re-add entries here to ship a character swap in the beta build only, e.g.
+//   ["bulwark:'human_space'", "bulwark:'custom_bulwark'"]
+// Requires the matching PICK entry in tools/pack-quaternius.js.
+const SWAPS=[];
 for(const [from,to] of SWAPS){
   if(!js.includes(from)){ console.error('BETA SWAP NOT FOUND: '+from); process.exit(1); }
   js=js.split(from).join(to);
