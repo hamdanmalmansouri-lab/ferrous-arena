@@ -80,6 +80,24 @@ Sizes: **S** = one focused session, **M** = 2–3 sessions, **L** = multi-sessio
 | **ART-04** `[ ]` | **Emissive screens.** Desks and consoles get animated canvas textures (scrolling telemetry), one shared texture per map. | S | `19-world` (props), `19b-maps` | One extra texture per map; screens animate. |
 | **ART-05** `[ ]` | **Prop simplification.** `gltf-transform simplify` on props and guns (target −40 % tris), verify silhouettes in `look.js`. **repack** | S | `tools/pack-quaternius` | Bundle smaller, screenshots unchanged to the eye. |
 
+## CUST — Custom characters (your own models)
+
+Route: **fully in-house** — model in Blender, bind to the CC0 Quaternius armature you already own with
+`tools/blender/rig_character.py`, pack. No cloud services, no Adobe account, every clip stays CC0.
+Read `CUSTOM-CHARACTER-PIPELINE.md` before starting any CUST task. Bone-heat weighting only works against a
+humanoid skeleton, so characters in this lane are **bipeds** (the Leela mech is the reference silhouette);
+drones and quadrupeds go to CUST-05.
+
+| Tag | Task | Size | Touches | Acceptance |
+|---|---|---|---|---|
+| **CUST-01** `[x]` v2.8.0 | **Local rigging tool.** `tools/blender/rig_character.py` — headless Blender: imports a donor Quaternius `.gltf`, keeps its armature + 24 actions, deletes its body, imports/joins/scales your mesh, `ARMATURE_AUTO` bone-heat bind, exports glTF Separate. `--show-rig` emits a bare-skeleton modelling reference. Packer gained a `CUSTOM` dir constant + a commented `PICK` template. | S | `tools/blender/` (new), `tools/pack-quaternius` | **Done.** Verified on a 132-tri stand-in: 62 bones, 24 clips, 0 unweighted vertices; through the real packer chain → all 13 game clips, skin intact (1 skin / 62 joints / JOINTS_0+WEIGHTS_0), 482 KB packed. |
+| **CUST-02** `[ ]` | **First custom enemy — model it.** Bipedal mech-creature, ≤ 6k tris, flat material colours, no maps, modelled against the `--show-rig` reference (T-pose, +Z, feet at origin), limbs gapped at armpits and thighs. Bind with CUST-01's script until it prints `unweighted vertices 0`. **Human art time — this is the task that needs you at the keyboard.** | L | `Assets/custom/<id>/`, art only | `Assets/custom/<id>/<id>.gltf` + `.bin` exist; script prints 0 unweighted vertices. |
+| **CUST-03** `[ ]` | **Pack it.** Uncomment the `PICK` template, set id + `height`. `clips:HUMAN_CLIPS`, `bakeFingers:true`, `ual:UAL_CLIPS` all apply unchanged because the rig is the stock one. **repack** | S | `tools/pack-quaternius` | Packer prints the id with all 13 clips + the UAL retargets; packed < 250 KB; bundle still < 8 MB. |
+| **CUST-04** `[ ]` | **Wire it in.** New enemy type in `21-enemies` (HP / speed / range / hitbox), spawn entry in `28-waves`, state machine reused from the Rusher, `look.js` scene. | M | `21-enemies`, `28-waves`, `32-loop` **loop**, `look.js`, `test5`, `test6` | Spawns, chases, attacks, takes damage and dies in the harness; screenshot in the gallery. |
+| **CUST-05** `[ ]` | **Non-biped path.** Drones/quadrupeds can't bone-heat against a humanoid rig: hand-place bones in Blender or drive them procedurally in `32-loop` (`spinners[]` / `ambients[]`). Decide per creature and document the choice. | M | `19-world`, `32-loop` **loop**, `21-enemies` | One non-biped custom enemy moves convincingly. |
+| **CUST-06** `[ ]` | **Custom textures (optional).** If flat colours aren't enough: own atlas in the packer's `MAPS`, `sharp` resize entry, `extras.packmap` key through `loadDoc`. Only after CUST-02..04 ship. | M | `tools/pack-quaternius`, `07-models` | Custom atlas re-attaches at load; bundle grows < 400 KB. |
+| **CUST-07** `[ ]` | **Clip budget.** The verified pack showed animation data dominates a custom character (482 KB for a 132-tri mesh). Add a per-model `clips` subset for enemies that never strafe, and measure. **repack** | S | `tools/pack-quaternius` | Enemy models pack ≥ 30 % smaller with no visible loss. |
+
 ## UI — HUD, screens, accessibility
 
 | Tag | Task | Size | Touches | Acceptance |
@@ -129,6 +147,7 @@ Sessions that do not collide (different files):
 - **Lane B (maps):** MAP-01 on Foundry/Relay while Lane A is on Frost/Reactor, then MAP-03, MAP-06.
 - **Lane C (content):** GP-07 → GP-10 → GP-11 (items, screens, persistence).
 - **Lane D (audio):** SFX-01 → SFX-02 → SFX-03 → SFX-06.
+- **Lane F (custom art):** CUST-01 done → **CUST-02 (your art time)** → CUST-03 → CUST-04. CUST-02 blocks the rest; nothing else in the file touches `Assets/custom/`.
 - **Lane E (tooling):** TOOL-01 → TOOL-03 → TOOL-02, then ART-05 / PERF-05 (packer, repack on main only).
 - **Needs a phone:** PERF-01 → MOB-01 → MOB-04; everything in PERF after that.
 

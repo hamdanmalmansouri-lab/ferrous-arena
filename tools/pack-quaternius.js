@@ -15,6 +15,7 @@ const KIT=path.join(ROOT,'Sci-Fi Essentials Kit[Standard]');
 const FEM=path.join(ROOT,'modular females','Individual Characters','glTF');
 const MALE=path.join(ROOT,'Modular male','Individual Characters','glTF');
 const GUNS=path.join(ROOT,'sci-fi guns','Guns','glTF');
+const CUSTOM=path.join(ROOT,'custom');   /* your own models: Assets/custom/<id>/<id>.gltf, built by tools/blender/rig_character.py */
 const UAL=path.join(ROOT,'Universal Animation Library[Standard]','Universal Animation Library[Standard]','Unreal-Godot','UAL1_Standard.glb');
 /* Universal Animation Library clips retargeted onto the human rig (see tools/retarget.js): jump start / loop / land, pistol reload
    (played as an upper-body layer while player.reloading>0; the UAL has no rifle reload, the arms are two-hand-free so it reads pistol-ish) */
@@ -35,6 +36,15 @@ const PICK={
   human_scifi: {file:path.join(FEM,'SciFi.gltf'),      pack:'human', clips:HUMAN_CLIPS, height:1.76, drop:['Pistol'], bakeFingers:true, ual:UAL_CLIPS},
   human_space: {file:path.join(MALE,'Spacesuit.gltf'), pack:'human', clips:HUMAN_CLIPS, height:1.9,  drop:['Pistol'], bakeFingers:true, ual:UAL_CLIPS},
   mech_leela: {file:path.join(MECH,'Leela.gltf'),  pack:'mech',   clips:LEELA_CLIPS, height:1.6},
+  custom_bulwark: {file:path.join(CUSTOM,'bulwark','bulwark.gltf'), pack:'mech', clips:HUMAN_CLIPS, height:1.9, bakeFingers:true, ual:UAL_CLIPS},
+  /* --- your own characters -------------------------------------------------------------------------
+     Built by:  blender --background --python tools/blender/rig_character.py -- \
+                  --mesh Assets/custom/<id>/<id>.obj --donor "Assets/Modular male/Individual Characters/glTF/Swat.gltf" \
+                  --out  Assets/custom/<id>/<id>.gltf
+     The donor supplies the rig AND the clips, so the clip names are the stock Quaternius ones and
+     HUMAN_CLIPS / bakeFingers / UAL_CLIPS all apply unchanged. Uncomment and set the id + height:
+  custom_rusher: {file:path.join(CUSTOM,'rusher2','rusher2.gltf'), pack:'mech', clips:HUMAN_CLIPS, height:1.8, bakeFingers:true, ual:UAL_CLIPS},
+  ------------------------------------------------------------------------------------------------- */
   enemy_drone:{file:path.join(KIT,'glTF','Enemy_EyeDrone.gltf'), pack:'enemies', clips:DRONE_CLIPS, height:1.1},
   enemy_quad: {file:path.join(KIT,'glTF','Enemy_QuadShell.gltf'),pack:'enemies', clips:QUAD_CLIPS,  height:1.15},
   gun_ar:     {file:path.join(GUNS,'AR_2.gltf'),      pack:'sfguns', gun:true},
