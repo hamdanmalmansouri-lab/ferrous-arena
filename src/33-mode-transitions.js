@@ -7,7 +7,7 @@ function resetPlayerFor(mode,pos){
 }
 function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); }
 function goLobby(){
-  clearTimers();
+  clearTimers(); state.offer=null; state.fab=null;
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildLobby(); setMode('lobby');
   resetPlayerFor('lobby',new THREE.Vector3(0,0,6));
@@ -16,7 +16,7 @@ function goLobby(){
   SFX.portal(); syncHUD();
 }
 function goRange(){
-  clearTimers();
+  clearTimers(); state.offer=null; state.fab=null;
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildRange(); setMode('range');
   run.items={}; computeStats(); syncItems();
@@ -31,7 +31,7 @@ function goRun(seed){
   run.order=makeRunOrder(state.seed);
   run.items={}; run.itemsTaken=0; computeStats(); syncItems();
   state.score=0; state.kills=0; state.over=false; state.waveBreak=0; state.t=0; state.wave=0;
-  state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1;
+  state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1; state.scrap=0; state.offer=null; state.waveT=0;
   if(state.portal){ scene.remove(state.portal); state.portal=null; }
   setMode('run'); buildStage(1); player.hp=run.stats.maxHp;
   SFX.portal(); showBanner(CH().name+' deployed','Stage 1 · '+stageMap(1).name); syncHUD();

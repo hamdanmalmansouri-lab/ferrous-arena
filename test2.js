@@ -52,7 +52,12 @@ const path = require('path');
   // walk to the crate
   await page.evaluate(() => { const c = __ARENA__.pickups.find(p => p.kind === 'crate'); if (c) __ARENA__.player.pos.set(c.g.position.x, 0, c.g.position.z); });
   await page.waitForTimeout(400);
-  r = await page.evaluate(() => ({ items: __ARENA__.run.itemsTaken, crateLeft: __ARENA__.pickups.filter(p => p.kind === 'crate').length, chips: document.querySelectorAll('#items .it').length }));
+  r = await page.evaluate(() => ({ offer: !!__ARENA__.state.offer, opts: document.querySelectorAll('#card .opt').length, paused: !__ARENA__.state.running }));
+  console.log('crate offer:', JSON.stringify(r));
+  if (!r.offer || r.opts !== 3 || !r.paused) errors.push('CRATE did not open a 3-item offer: ' + JSON.stringify(r));
+  await page.keyboard.press('1');
+  await page.waitForTimeout(300);
+  r = await page.evaluate(() => ({ items: __ARENA__.run.itemsTaken, crateLeft: __ARENA__.pickups.filter(p => p.kind === 'crate').length, chips: document.querySelectorAll('#items .it').length, running: __ARENA__.state.running }));
   console.log('crate pickup:', JSON.stringify(r));
   await page.waitForTimeout(6000);
   r = await page.evaluate(() => ({ wave: __ARENA__.state.wave, enemies: __ARENA__.enemies.length }));

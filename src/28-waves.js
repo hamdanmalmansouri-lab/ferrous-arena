@@ -1,6 +1,6 @@
 /* ============================ waves ============================ */
 function startWave(nw){
-  state.wave=nw;
+  state.wave=nw; state.waveT=0;
   const boss=nw%BOSS_EVERY===0;
   const base=Math.min(4+Math.round(nw*2.2),34);
   state.spawnQueue=boss?Math.round(base*0.5):base;
@@ -68,7 +68,7 @@ function bossDefeated(pos){
 }
 function buildStage(stage){
   clearWorld(); if(state.portal){ scene.remove(state.portal); state.portal=null; }
-  const m=stageMap(stage); state.mapId=m.id; m.build();
+  const m=stageMap(stage); state.mapId=m.id; m.build(); spawnFabricator(m.spawn);
   const mod=stageMod(stage); state.mod=mod; state.mods={}; if(mod)state.mods[mod.id]=true;
   state.portalOpen=false; state.boss=null; state.spawnQueue=0; state.waveBreak=0;
   resetPlayerFor('run',m.spawn); player.hp=Math.max(player.hp,run.stats.maxHp*0.6);
@@ -81,7 +81,7 @@ function nextStage(){
   SFX.portal(); state.portalOpen=false; stageFadeT=1.0; fadeEl.classList.add('on');
   after(0.5,()=>{
     const hpKeep=player.hp; const m=buildStage(state.stage+1); state.stage++; player.hp=Math.max(hpKeep,player.hp);
-    state.startDelay=3.5; state.stageBanner=true;
+    state.startDelay=6; state.stageBanner=true;   // the long breath after a Warden
     showBanner(m.name,'Stage '+state.stage+' · '+m.sub+(state.mod?' · '+state.mod.name+': '+state.mod.desc:''),true);
     fadeEl.classList.remove('on'); syncHUD();
   });

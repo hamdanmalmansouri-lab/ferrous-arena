@@ -73,8 +73,10 @@ function showSettings(back){
   $('back').onclick=back;
 }
 function showCodex(){
-  showScreen('<h1>Item <span>Codex</span></h1><div class="tag">All items stack &middot; dropped by crates, enemies and Wardens</div>'+
-    '<div class="itemlist">'+ITEMS.map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+it.name+'</b> — '+it.desc+'</div>').join('')+'</div>'+
+  const group=t=>'<div class="tierhead" style="color:'+TIER_CSS[t]+'">'+tierLabel(t)+' &middot; '+TIER_W[t]+'%</div><div class="itemlist">'+
+    ITEMS.filter(it=>it.tier===t).map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+it.name+'</b> — '+it.desc+'</div>').join('')+'</div>';
+  showScreen('<h1>Item <span>Codex</span></h1><div class="tag">Every item is a pick of one from three &middot; crates, drops, Wardens, the Fabricator</div>'+
+    group('legendary')+group('rare')+group('common')+
     '<button class="ghost" id="back">Back</button>');
   $('back').onclick=showMenu;
 }
@@ -102,7 +104,8 @@ function showPause(){
    (isRun?'<div class="tag" style="margin-top:10px">Stage '+state.stage+' · '+stageMap(state.stage).name+(state.mod?' · '+state.mod.name+' — '+state.mod.desc:'')+' · seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
    '<div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
-   '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div></div>'+inventoryHTML():controlsHTML())+
+   '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div>'+
+   '<div><div class="k">Scrap</div><div class="v">'+state.scrap+'</div></div></div>'+inventoryHTML():controlsHTML())+
    '<button id="go">Resume</button>'+
    '<div class="btns"><button id="lob" class="ghost">'+(isRun?'Abandon run &middot; lobby':'Return to lobby')+'</button><button id="menu" class="ghost">Main menu</button></div>'+
    '<button id="settings" class="ghost">Settings</button>');

@@ -84,13 +84,14 @@ function killEnemy(e,head){
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
-    say('<b>WARDEN DESTROYED</b> +'+pts,'item'); showBanner('Warden down','Bonus loot',true);
+    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
     state.boss=null; bossDefeated(e.group.position.clone());
   }else{
     SFX.kill();
     spark(e.group.position.clone().setY(1.1),e.type==='shooter'?0xd07bff:0xff7a4d,16);
-    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>');
+    const sc=SCRAP_VALUE[e.elite?'elite':e.type]||0; addScrap(sc,e.group.position.clone().setY(1.2));
+    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>'+(sc?' &middot; '+sc+' scrap':''));
     const r=Math.random();
     if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }

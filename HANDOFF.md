@@ -1,6 +1,6 @@
 # Ferrous Arena — Project Handoff
 
-**Status:** v3.0.0-p1 — the v3.0 "Meltdown" pass is in progress (phase 1 correctness shipped; phases 2–7 in `MASTER-ROADMAP.md` V3 table). Base: playable v2.8 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
+**Status:** v3.0.0-p2 — the v3.0 "Meltdown" pass is in progress (phases 1 correctness + 2 roguelite loop shipped; phases 2–7 in `MASTER-ROADMAP.md` V3 table). Base: playable v2.8 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
 Quaternius modular-human operatives + Sci-Fi Guns, mech/kit enemies, layered skeletal animation with strafes, roll, hit reactions + procedural recoil/flinch/shake, settings screen), verified error-free in headless Chromium (six suites). Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
 **Deliverables:** `ferrous-arena.html` (standalone, open and play) and `docs/` (GitHub Pages PWA for phones).
 **Live copy:** published as a private Claude artifact (same URL since v1).
@@ -15,7 +15,7 @@ Operatives (Ultimate Modular Men/Women), weapons (Sci-Fi Guns), enemies (Animate
 geometry, WebAudio-synthesised sound and canvas-generated labels. If the packed models fail to parse the game falls back to the v2 box models.
 
 **Flow:** Main menu → Lobby (pick an operative, warm up on the range) → Deploy → waves of robots →
-supply crate with an item after every wave → **Warden boss every 5 waves** (3 items on kill) → **stage portal** → new map with a
+supply crate after every wave → an **offer card** (pick 1 of 3, paused) → **Warden boss every 5 waves** (3 offers on kill) → **stage portal** → new map with a
 modifier and a stronger Warden pattern → … → death → stats (seed shown, replayable) → redeploy.
 
 **Controls (desktop):** WASD move, mouse look (pointer lock), LMB hold to fire, **RMB aim** (camera in, FOV 66→50, spread ×0.6), **Q ability**, R reload,
@@ -38,7 +38,7 @@ interact pill, pause button. Aim assist on by default, optional auto-fire (menu 
 
 Base numbers live in `CHARS[i].base`; every derived stat is computed in `computeStats()`.
 
-### Items (`ITEMS[]`) — all stack, all pure stat modifiers
+### Items (`ITEMS[]`) — all stack, all pure stat modifiers, each with a `tier` (common 70 % / rare 25 % / legendary 5 %)
 | Code | Item | Effect per stack |
 |---|---|---|
 | SY | Stim Syringe | +12% fire rate |
@@ -50,17 +50,22 @@ Base numbers live in `CHARS[i].base`; every derived stat is computed in `compute
 | QL | Quick Loader | −15% reload time (multiplicative) |
 | RG | Regen Module | +1.2 HP/s |
 | AC | Ability Capacitor | −12% ability cooldown (multiplicative) |
-| VC | Vampiric Coil | +3% lifesteal |
+| VC | Vampiric Coil | +3% lifesteal (rare) |
+| RH | Reactor Heart | +35 max HP and +1 HP/s (legendary) |
+| OC | Overclock Chip | +15% fire rate and +8% damage (legendary) |
 
-**Sources:** supply crate after each wave clear (1 item, 5–10 m from the player on open ground), 6% drop from any normal
-kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+28% max HP).
+FL / RG / AC / VC are rare, the rest common.
+
+**Sources:** supply crate after each wave clear (5–10 m from the player on open ground; 2 picks under Bounty), 6% drop from any normal
+kill (gold octahedron), 3 drops from a Warden, the Fabricator. **Every source opens an offer** (`queueOffer(count,minTier)` → `state.offer`, sim paused, `pickOffer(i)` → `giveItem`) — nothing is auto-rolled. 16% of kills drop a repair kit (+28% max HP).
+**Scrap:** `SCRAP_VALUE` per kill (Rusher 3, Lancer 5, Elite 12, Warden 60) → `state.scrap`, shown next to the score. **Fabricator** (`spawnFabricator`, one per stage ≥ 10 m from the spawn, on the compass): `FAB_OPTS` 60 = offer, 120 = rare-or-better offer, 200 = scrap a held stack (`removeItemStack`) then a fresh offer.
 
 ### Enemies
 - **Rusher** (chaser, red) — melee. At most `MELEE_TOKENS` (3) Rushers hold an attack token at once; the others orbit at 2.5–4 m until one frees (token released beyond 7 m or on death). **Lancer** (shooter, purple) — holds 7–12 m, strafes, fires on LOS (slab test, `lineOfSight`). Every hit on the player grants 0.35 s of i-frames (`hurtPlayer`).
 - **Warden** (boss, gold, 2.3× scale) — `hp = (700 + wave*140) * (1 + wave*0.035)`; melee inside 3.2 m,
   12-projectile radial burst every 2.6 s, 40% chance instead to charge (3.4× speed for 1.3 s). Boss bar under the top HUD.
 - **Dummy** (grey) — practice-range only, wanders, never attacks, respawns 2 s after death.
-- Scaling: `hp = (34 + wave*9) * (1 + wave*0.035)`, speed `+min(wave*0.16, 2)`; boss waves spawn half the normal count.
+- Scaling: `hp = (34 + wave*8) * (1 + wave*0.018)`, speed `+min(wave*0.16, 2)`; melee / projectile damage grows with `min(wave, 22)`; boss waves spawn half the normal count.
 
 ### Models and animation (`05-gltfloader`, `06-assets`, `07-models`)
 - **Cast:** Vanguard = Modular Men **Swat** + `AR_2`, Ranger = Modular Women **SciFi** (blue hair) + `Sniper_3`, Bulwark = Modular Men **Spacesuit** + `Grenade_2`
@@ -192,7 +197,7 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | `23b-input-state` | `TOUCH` detection, **`SETTINGS`** (touch/mouse/pad sensitivity multipliers, volume, invert Y, screen shake; `applySettings()`), `inp`, `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
 | `24-math-helpers` | scratch vectors (`_v1.._v3`, `_fwd`, `_camF`…), `forwardInto(out,…)`, `resolveXZ`, `supportHeight`, **`rayAABB` / `rayWorld(o,d,tFar,tNear)`** (slab tests over `boxes[]` + the floor — used by shots, the camera and `lineOfSight`; a box containing the origin never blocks) |
 | `25-hud-helpers` | `syncHUD` (ability, boss bar, touch button, stage), `syncCompass` (crates/items/boss/portal bearings), `syncItems`, `syncRange`, `setMode` |
-| `26-items`, `27-characters` | `giveItem(id)`, `selectChar(i, inLobby)` |
+| `26-items`, `27-characters` | `giveItem(id)`, **offers** (`rollTier/rollOffer`, `queueOffer`, `showOffer/pickOffer/closeOffer`, `offerMove/offerConfirm/offerKey` for pad + keys), **scrap** (`SCRAP_VALUE`, `addScrap`), **Fabricator** (`FAB_OPTS`, `spawnFabricator`, `openFabricator/showFab/fabBuy`, `showScrapPick/scrapPick/removeItemStack`); `selectChar(i, inLobby)` |
 | `28-waves` | `startWave` (boss on multiples of `BOSS_EVERY`, `e.mk = stage`), `spawnOne` (nav-snapped, Lancer share + swift mod), `waveCleared` (crate, bounty), **`bossDefeated`, `buildStage`, `nextStage`** |
 | `29-shooting` | `getHitList()` (enemy hit boxes + plates/barrels, rebuilt on `hitListVer`), `castShot(origin,dir,maxT,near)`, `tryFire` (per pellet: camera→aim point, then muzzle→aim point; crit, range targets; accuracy per pellet), `dealDamage` (lifesteal on `min(dmg, hp)`), `killEnemy`, `startReload` |
 | `30-abilities`, `31-damage` | `useAbility` (Blink uses `inp`), `shakeCam(amp,dist)`, `hurtPlayer` (shield, i-frames, haptic, flinch + shake) |
@@ -224,7 +229,7 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 - Operative feel: `CHARS[i].base` and `.ability`. Item strength: the multipliers inside `computeStats()`.
 - Drop rates: `killEnemy` (`r<0.06` item, `r<0.22` heal). Crate distance: `waveCleared`.
 - Difficulty: `makeEnemy` hp/speed lines, `startWave` counts, `spawnOne` shooter share, boss timers in the boss branch of `update`.
-- Melee pressure: `MELEE_TOKENS` (3), i-frames 0.35 s in `hurtPlayer`, orbit band 2.5–4 m in the chaser branch. Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`, 3.5 after a portal. Alive cap 16 in the spawn block (summons up to 20).
+- Melee pressure: `MELEE_TOKENS` (3), i-frames 0.35 s in `hurtPlayer`, orbit band 2.5–4 m in the chaser branch. Wave break 2.5 s when `state.waveT < 20` else 4.5 s; first-wave delay `state.startDelay=3` in `goRun`, 6 after a portal. Economy: `TIER_W`, `SCRAP_VALUE`, `FAB_OPTS` costs. Alive cap 16 in the spawn block (summons up to 20).
 - Nav: `NAV_STEP`, `NAV_RADIUS`, repath interval in `navSteer`, `maxExpand` 2500. Stage: `MODS[]` effects in `spawnOne`/`killEnemy`/`dropPickup`/movement; boss patterns in the boss branch; reactor `period` in `buildReactor`.
 - Touch: `TOUCH_SENS_BASE` 0.0085 × `SETTINGS.touchSens`; `MOUSE_SENS_BASE` 0.0022; `PAD_SENS_BASE` 2.8; `STICK_R`; aim-assist cone/pull in `aimAssist`.
 - Models: per-model `height` in the packer `PICK`, `GUN_MOUNT` (scale 0.5) / `MOUNTS`, `GUN_AXIS` fallback, `player.aimT` 2.5 s / `hitT` 0.45 s / `rollT` 0.5 s / `landT` 0.55 s, jump-start window 0.32 s, `ENEMY_TINT`, `HOVER_Y`, emissive intensity 1.6 / colour cast 0.55 in `spawnCharacter`, clip `timeScale` formulas in the loop.
@@ -248,6 +253,7 @@ node test3.js   # touch: layer on, lobby without pointer lock, joystick moves, l
 node test4.js   # stages: nav grid per map, 3 Rushers close on the player on every map (incl. Relay platform top), portal -> next stage, Mk2 summons, reactor pulse
 node test5.js   # models parsed (13 items, 10 clips), settings sliders persist, enemies animate, kill -> corpse, draw calls
 node test6.js   # layers: runshoot while moving+firing, airborne = -|aim, runL / runB strafes, Blink = roll, hit = idle|hit, kick decays, Rusher melee one-shot, flinch, shake decays, LOD count, pod emote -> idle, heads found
+node test8.js   # v3 gates: damage curve table, crate -> 3-card offer -> key 2 gives candidate 2, Bounty = two picks, tier roll %, scrap credit, Fabricator offer / rare / reroll, wave break 2.5 vs 4.5, wave-25 Rusher time-to-kill
 node test7.js   # v3 gates: back-to-cover shot hits, enemy behind can't eat a shot, 3 Rushers leave a Vanguard alive after 4 s, ≤3 tokens, omni sprint 0.8x, lifesteal clamp, CDR 0.45, Barrier 45%, timers, docs/ boots with the network off
 ```
 
@@ -294,6 +300,7 @@ Roughly in value order (details in `ROADMAP.md`):
 
 - Single file, no build step for the deliverable. Three r128 non-module, vendored (`site/three.min.js`); the standalone inlines it, `docs/` loads it same-origin. CDN allowlist for the artifact: scripts only from
   cdnjs / jsdelivr-npm / tailwind / jquery; no external images or fetches (so `docs/` extras never go into `arena.body.html`, which is the one file still pointing at cdnjs).
+- Items are never granted silently: route every source through `queueOffer` so the player chooses. The offer pauses the sim (`state.running=false`) and `state.forced` (set by `forceStart`) lets the harness resume without pointer lock.
 - No `setTimeout` for anything gameplay-timed — use `after(seconds, fn)`; `goRun/goLobby/goRange` clear the queue.
 - Never raycast `colliderMeshes` per step; use `rayWorld` (slab test) for world hits and the cached `getHitList()` for hit boxes.
 - Dark-only look is deliberate; `body` paints its background explicitly.

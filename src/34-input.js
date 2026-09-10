@@ -15,6 +15,10 @@ addEventListener('keydown',e=>{
   if(k==='shift')keys.shift=true;
   if(k===' '){keys.space=true;e.preventDefault();}
   if(k==='`'||k==='~')toggleDebug();
+  if(state.offer&&!state.running){   // offer / Fabricator card: number keys choose, Esc / Tab leave the Fabricator
+    if(/^[1-9]$/.test(k))offerKey(parseInt(k)-1);
+    else if((k==='escape'||k==='tab')&&state.offer.stage==='fab'){ e.preventDefault(); closeOffer(); }
+    return; }
   if(!state.running)return;
   if(k==='r')startReload();
   if(k==='q')useAbility();
@@ -45,9 +49,11 @@ addEventListener('mousemove',e=>{
 document.addEventListener('pointerlockchange',()=>{
   pointerLocked=(document.pointerLockElement===canvas);
   if(pointerLocked){
-    if(!state.over&&state.mode!=='menu')resumePlay();
+    if(state.offer)renderOffer();                     // relocked while a card is up: keep the card, do not resume
+    else if(!state.over&&state.mode!=='menu')resumePlay();
   }else{
     keys.mouse=false; keys.aim=false;
+    if(state.offer){ renderOffer(); return; }         // Esc during a card: re-render it with a usable mouse
     if(state.running&&!state.over){ state.running=false; if(state.mode==='lobby')showLobbyPanel(); else showPause(); }
   }
 });

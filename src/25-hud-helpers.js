@@ -12,14 +12,14 @@ function popHit(kill,crit){
 }
 function syncItems(){
   let h='';
-  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0)h+='<div class="it" title="'+it.name+': '+it.desc+'" style="color:'+it.color+';border-color:'+it.color+'55">'+it.code+'<small>'+c+'</small></div>'; });
+  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0)h+='<div class="it t-'+it.tier+'" title="'+it.name+' ('+it.tier+'): '+it.desc+'" style="color:'+it.color+';border-color:'+TIER_CSS[it.tier]+'">'+it.code+'<small>'+c+'</small></div>'; });
   itemsEl.innerHTML=h;
 }
 function syncHUD(){
   const s=run.stats;
   uiWave.textContent=state.wave; uiStage.textContent=state.stage;
   uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue;
-  uiScore.textContent=state.score.toLocaleString();
+  uiScore.textContent=state.score.toLocaleString(); uiScrap.textContent=state.scrap;
   uiKills.textContent=state.kills;
   const nb=state.wave>0?(BOSS_EVERY-(state.wave%BOSS_EVERY))%BOSS_EVERY:BOSS_EVERY;
   uiBossIn.textContent=state.boss?'NOW':(nb===0?BOSS_EVERY:nb);
@@ -65,5 +65,6 @@ function syncCompass(){
   for(const p of pickups){ if(p.kind==='crate')mark(p.g.position.x,p.g.position.z,'crate','&#9632;'); else if(p.kind==='item')mark(p.g.position.x,p.g.position.z,'item','&#9670;'); }
   if(state.boss&&!state.boss.dead)mark(state.boss.group.position.x,state.boss.group.position.z,'boss','&#9650;');
   if(state.portalOpen&&state.portal)mark(state.portal.position.x,state.portal.position.z,'portal','&#9679;');
+  if(state.fab)mark(state.fab.pos.x,state.fab.pos.z,'fab','&#9635;');
   compassEl.innerHTML=html;
 }

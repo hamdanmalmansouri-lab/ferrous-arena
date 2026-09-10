@@ -100,3 +100,14 @@ function autoFireCheck(){
 function doInteract(){ if(nearInteract){ const a=nearInteract.action; nearInteract=null; a(); } }
 function pauseGame(){ if(!state.running)return; if(pointerLocked){ document.exitPointerLock(); return; } state.running=false; state.mode==='lobby'?showLobbyPanel():showPause(); }
 function haptic(ms){ if(TOUCH&&navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+/* ---- offer / Fabricator cards: D-pad or left stick moves, A confirms, B leaves the Fabricator ---- */
+const offerPad={prev:[]};
+function pollOfferPad(){
+  if(!state.offer||!navigator.getGamepads)return; const gps=navigator.getGamepads(); let gp=null; for(let i=0;i<gps.length;i++){ if(gps[i]&&gps[i].connected){gp=gps[i];break;} } if(!gp)return;
+  const b=gp.buttons, ax=gp.axes; const pressed=i=>!!(b[i]&&(b[i].pressed||b[i].value>0.5));
+  const edge=(i,now)=>{ now=now===undefined?pressed(i):now; const was=!!offerPad.prev[i]; offerPad.prev[i]=now; return now&&!was; };
+  if(edge(14)||edge(100,(ax[0]||0)<-0.6))offerMove(-1);
+  if(edge(15)||edge(101,(ax[0]||0)>0.6))offerMove(1);
+  if(edge(0))offerConfirm();
+  if(edge(1)&&state.offer&&state.offer.stage==='fab')closeOffer();
+}

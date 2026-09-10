@@ -253,7 +253,7 @@
 #compass:before{content:'';position:absolute;left:50%;top:0;width:1px;height:8px;background:rgba(255,255,255,.35)}
 #compass i{position:absolute;top:2px;transform:translateX(-50%);font-style:normal;font-size:12px;line-height:1;text-shadow:0 1px 4px rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;gap:1px}
 #compass i b{font:600 9px/1 "Inter",system-ui,sans-serif;color:var(--dim)}
-#compass i.crate,#compass i.item{color:var(--gold)} #compass i.boss{color:var(--hot)} #compass i.portal{color:var(--accent)}
+#compass i.crate,#compass i.item{color:var(--gold)} #compass i.boss{color:var(--hot)} #compass i.portal{color:var(--accent)} #compass i.fab{color:var(--warn)}
 #hud[data-mode="lobby"] #compass,#hud[data-mode="range"] #compass{display:none}
 #bossbar{top:104px}
 @media (pointer:coarse){ #compass{top:calc(52px + env(safe-area-inset-top));width:min(360px,44vw)} #bossbar{top:calc(78px + env(safe-area-inset-top))} }
@@ -266,6 +266,27 @@
 .set b{color:var(--txt);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
 .set input[type=range]{width:100%;accent-color:var(--accent);height:24px}
 @media (pointer:coarse){ .set{grid-template-columns:1fr 1.6fr 52px;font-size:12px} .set input[type=range]{height:32px} }
+
+/* ---------- item offers / Fabricator ---------- */
+.offer{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+.offer.many{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.opt{position:relative;margin:0;text-align:left;padding:16px 16px 16px;min-height:150px;background:rgba(255,255,255,.04);color:var(--txt);
+     border:2px solid var(--line);border-radius:14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;font:inherit;letter-spacing:0;transition:border-color .15s,transform .15s}
+.opt:hover{transform:translateY(-2px);filter:none}
+.opt .tier{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+.opt .code{font:700 20px/1 ui-monospace,Menlo,monospace}
+.opt h3{margin:0;font-size:16px;font-weight:600}
+.opt p{margin:0;font-size:12px;color:var(--dim);line-height:1.4}
+.opt small{margin-top:auto;font-size:11px;color:var(--dim)}
+.opt kbd{position:absolute;right:12px;top:12px}
+.opt.t-rare{border-color:rgba(78,168,255,.6)} .opt.t-rare .tier{color:var(--accent)}
+.opt.t-legendary{border-color:rgba(255,209,102,.8);box-shadow:0 0 18px rgba(255,209,102,.18)} .opt.t-legendary .tier{color:var(--gold)}
+.opt.sel{outline:2px solid #fff;outline-offset:2px}
+.opt.off{opacity:.45}
+.tierhead{margin-top:18px;font-size:10px;letter-spacing:.2em;text-transform:uppercase}
+#items .it.t-legendary{box-shadow:0 0 10px rgba(255,209,102,.35)}
+@media (pointer:coarse){ .opt{min-height:120px;padding:12px} .opt kbd{display:none} .offer{gap:8px} .opt h3{font-size:14px} }
+@media (max-width:640px){ .offer{grid-template-columns:1fr} }
 </style>
 
 <div id="wrap">
@@ -282,6 +303,7 @@
       <div><div class="k">Wave</div><div class="v acc" id="uiWave">1</div></div>
       <div><div class="k">Hostiles</div><div class="v"><span id="uiLeft">0</span><small>+<span id="uiQueue">0</span></small></div></div>
       <div><div class="k">Score</div><div class="v" id="uiScore">0</div></div>
+      <div><div class="k">Scrap</div><div class="v" id="uiScrap" style="color:var(--warn)">0</div></div>
       <div><div class="k">Next boss</div><div class="v" id="uiBossIn">5</div></div>
       <div><div class="k">Stage</div><div class="v" id="uiStage">1</div></div>
     </div>
@@ -4612,7 +4634,7 @@ function makeAnimator(root,clips){
 /* ---- 11-constants.js ---- */
 /* ============================ constants ============================ */
 const PLAYER_R=0.42, EYE=1.62, GRAV=22, JUMP=7.6;
-const REGEN_DELAY=5, REGEN_RATE=6;
+const REGEN_DELAY=5, REGEN_RATE=4;
 const BOSS_EVERY=5;
 const MELEE_TOKENS=3;             // chasers allowed in the attack state at once; the rest orbit
 /* gameplay timers: ticked from update(dt) so they pause with the simulation (never setTimeout for gameplay) */
@@ -4639,25 +4661,31 @@ const CHARS=[
 
 /* ---- 13-data-items.js ---- */
 /* ============================ data: items ============================ */
+/* tier drives the offer roll (TIER_W), the codex grouping and the HUD chip border (TIER_CSS) */
 const ITEMS=[
-  {id:'syringe',  name:'Stim Syringe',     code:'SY',color:'#4ea8ff',desc:'+12% fire rate'},
-  {id:'plating',  name:'Hardened Plating', code:'HP',color:'#3ddc84',desc:'+20 max health'},
-  {id:'servo',    name:'Servo Legs',       code:'SV',color:'#8fd3ff',desc:'+10% move speed'},
-  {id:'lens',     name:'Focus Lens',       code:'FL',color:'#ffd166',desc:'+10% crit chance (2× dmg)'},
-  {id:'rounds',   name:'Tungsten Rounds',  code:'TR',color:'#ff9e3d',desc:'+10% damage'},
-  {id:'extmag',   name:'Extended Mag',     code:'XM',color:'#c9a0ff',desc:'+25% magazine size'},
-  {id:'loader',   name:'Quick Loader',     code:'QL',color:'#ffc247',desc:'-15% reload time'},
-  {id:'regen',    name:'Regen Module',     code:'RG',color:'#7ef0a8',desc:'+1.2 HP/s regeneration'},
-  {id:'capacitor',name:'Ability Capacitor',code:'AC',color:'#6fe3ff',desc:'-12% ability cooldown'},
-  {id:'coil',     name:'Vampiric Coil',    code:'VC',color:'#ff6a8a',desc:'+3% lifesteal'}
+  {id:'syringe',  name:'Stim Syringe',     code:'SY',color:'#4ea8ff',tier:'common',   desc:'+12% fire rate'},
+  {id:'plating',  name:'Hardened Plating', code:'HP',color:'#3ddc84',tier:'common',   desc:'+20 max health'},
+  {id:'servo',    name:'Servo Legs',       code:'SV',color:'#8fd3ff',tier:'common',   desc:'+10% move speed'},
+  {id:'lens',     name:'Focus Lens',       code:'FL',color:'#ffd166',tier:'rare',     desc:'+10% crit chance (2× dmg)'},
+  {id:'rounds',   name:'Tungsten Rounds',  code:'TR',color:'#ff9e3d',tier:'common',   desc:'+10% damage'},
+  {id:'extmag',   name:'Extended Mag',     code:'XM',color:'#c9a0ff',tier:'common',   desc:'+25% magazine size'},
+  {id:'loader',   name:'Quick Loader',     code:'QL',color:'#ffc247',tier:'common',   desc:'-15% reload time'},
+  {id:'regen',    name:'Regen Module',     code:'RG',color:'#7ef0a8',tier:'rare',     desc:'+1.2 HP/s regeneration'},
+  {id:'capacitor',name:'Ability Capacitor',code:'AC',color:'#6fe3ff',tier:'rare',     desc:'-12% ability cooldown'},
+  {id:'coil',     name:'Vampiric Coil',    code:'VC',color:'#ff6a8a',tier:'rare',     desc:'+3% lifesteal'},
+  {id:'reactor',  name:'Reactor Heart',    code:'RH',color:'#ff7a9a',tier:'legendary',desc:'+35 max health and +1 HP/s'},
+  {id:'overclock',name:'Overclock Chip',   code:'OC',color:'#ffd166',tier:'legendary',desc:'+15% fire rate and +8% damage'}
 ];
 const ITEM_BY_ID={}; ITEMS.forEach(it=>ITEM_BY_ID[it.id]=it);
+const TIER_ORDER=['common','rare','legendary'];
+const TIER_W={common:70,rare:25,legendary:5};
+const TIER_CSS={common:'#8fa2bd',rare:'#4ea8ff',legendary:'#ffd166'};
 
 /* ---- 14-dom.js ---- */
 /* ============================ dom ============================ */
 const $=id=>document.getElementById(id);
 const canvas=$('c'), hud=$('hud'), screenEl=$('screen'), card=$('card');
-const uiWave=$('uiWave'),uiLeft=$('uiLeft'),uiQueue=$('uiQueue'),uiScore=$('uiScore'),uiKills=$('uiKills'),uiBossIn=$('uiBossIn');
+const uiWave=$('uiWave'),uiLeft=$('uiLeft'),uiQueue=$('uiQueue'),uiScrap=$('uiScrap'),uiScore=$('uiScore'),uiKills=$('uiKills'),uiBossIn=$('uiBossIn');
 const uiHp=$('uiHp'),uiMaxHp=$('uiMaxHp'),hpfill=$('hpfill'),shfill=$('shfill'),uiMag=$('uiMag'),uiAmmoLbl=$('uiAmmoLbl'),uiChar=$('uiChar');
 const reloadbar=$('reloadbar'),reloadfill=$('reloadfill'),crossEl=$('cross'),hitmark=$('hitmark');
 const dmgEl=$('dmg'),lowvig=$('lowvig'),feed=$('feed'),banner=$('banner'),bnT=$('bnT'),bnS=$('bnS');
@@ -5226,15 +5254,15 @@ function n(id){ return run.items[id]||0; }
 function computeStats(){
   const b=CH().base;
   const s={
-    maxHp: b.hp+20*n('plating'),
+    maxHp: b.hp+20*n('plating')+35*n('reactor'),
     speed: b.speed*(1+0.10*n('servo')),
     sprint: b.sprint*(1+0.10*n('servo')),
-    dmg: b.dmg*(1+0.10*n('rounds')),
-    fireT: b.fireT/(1+0.12*n('syringe')),
+    dmg: b.dmg*(1+0.10*n('rounds')+0.08*n('overclock')),
+    fireT: b.fireT/(1+0.12*n('syringe')+0.15*n('overclock')),
     mag: Math.round(b.mag*(1+0.25*n('extmag'))),
     reloadT: b.reloadT*Math.pow(0.85,n('loader')),
     crit: Math.min(1,0.05+0.10*n('lens')),
-    regen: 1.2*n('regen'),
+    regen: 1.2*n('regen')+1*n('reactor'),
     cdMult: Math.max(0.45,Math.pow(0.88,n('capacitor'))),
     lifesteal: 0.03*n('coil'),
     pellets:b.pellets, spread:b.spread, headMult:b.headMult, recoil:b.recoil
@@ -5407,8 +5435,8 @@ function finishEnemy(g,type,wave,animator,bones,model,modelScale){
   const headHit=new THREE.Mesh(GEO_HEADHIT,MAT_HIDDEN);
   headHit.position.y=1.79; g.add(headHit);
 
-  const scale=wave>0?(1+wave*0.035):1;
-  let hp=(34+wave*9)*scale, speed=(type==='shooter'?2.9:4.05)+Math.min(wave*0.16,2.0);
+  const scale=wave>0?(1+wave*0.018):1;   // v3: flatter curve — item choice + scrap carry the power instead of raw HP
+  let hp=(34+wave*8)*scale, speed=(type==='shooter'?2.9:4.05)+Math.min(wave*0.16,2.0);
   if(type==='boss'){ hp=(700+wave*140)*scale; speed=3.4+Math.min(wave*0.05,1.2); }
   if(type==='dummy'){ hp=260; speed=1.4; }
   const e={
@@ -5639,7 +5667,8 @@ function dropPickup(pos,kind){
 /* ============================ state ============================ */
 const state={mode:'menu',running:false,over:false,wave:0,score:0,kills:0,spawnQueue:0,waveBreak:0,t:0,acc:{shots:0,hits:0},
              boss:null,best:save.get('best',0)|0,startDelay:0,shake:0,
-             stage:1,mapId:'foundry',mods:{},mod:null,portalOpen:false,portal:null,seed:0,bestStage:save.get('bestStage',0)|0};
+             stage:1,mapId:'foundry',mods:{},mod:null,portalOpen:false,portal:null,seed:0,bestStage:save.get('bestStage',0)|0,
+             scrap:0,offer:null,fab:null,waveT:0,forced:false};
 const rangeStats={hits:0,targets:0,dmgLog:[]};
 const keys={};
 let pointerLocked=false, spawnTimer=0, nearInteract=null;
@@ -5747,6 +5776,17 @@ function autoFireCheck(){
 function doInteract(){ if(nearInteract){ const a=nearInteract.action; nearInteract=null; a(); } }
 function pauseGame(){ if(!state.running)return; if(pointerLocked){ document.exitPointerLock(); return; } state.running=false; state.mode==='lobby'?showLobbyPanel():showPause(); }
 function haptic(ms){ if(TOUCH&&navigator.vibrate){ try{navigator.vibrate(ms);}catch(e){} } }
+/* ---- offer / Fabricator cards: D-pad or left stick moves, A confirms, B leaves the Fabricator ---- */
+const offerPad={prev:[]};
+function pollOfferPad(){
+  if(!state.offer||!navigator.getGamepads)return; const gps=navigator.getGamepads(); let gp=null; for(let i=0;i<gps.length;i++){ if(gps[i]&&gps[i].connected){gp=gps[i];break;} } if(!gp)return;
+  const b=gp.buttons, ax=gp.axes; const pressed=i=>!!(b[i]&&(b[i].pressed||b[i].value>0.5));
+  const edge=(i,now)=>{ now=now===undefined?pressed(i):now; const was=!!offerPad.prev[i]; offerPad.prev[i]=now; return now&&!was; };
+  if(edge(14)||edge(100,(ax[0]||0)<-0.6))offerMove(-1);
+  if(edge(15)||edge(101,(ax[0]||0)>0.6))offerMove(1);
+  if(edge(0))offerConfirm();
+  if(edge(1)&&state.offer&&state.offer.stage==='fab')closeOffer();
+}
 
 /* ---- 24-math-helpers.js ---- */
 /* ============================ math helpers ============================ */
@@ -5828,14 +5868,14 @@ function popHit(kill,crit){
 }
 function syncItems(){
   let h='';
-  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0)h+='<div class="it" title="'+it.name+': '+it.desc+'" style="color:'+it.color+';border-color:'+it.color+'55">'+it.code+'<small>'+c+'</small></div>'; });
+  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0)h+='<div class="it t-'+it.tier+'" title="'+it.name+' ('+it.tier+'): '+it.desc+'" style="color:'+it.color+';border-color:'+TIER_CSS[it.tier]+'">'+it.code+'<small>'+c+'</small></div>'; });
   itemsEl.innerHTML=h;
 }
 function syncHUD(){
   const s=run.stats;
   uiWave.textContent=state.wave; uiStage.textContent=state.stage;
   uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue;
-  uiScore.textContent=state.score.toLocaleString();
+  uiScore.textContent=state.score.toLocaleString(); uiScrap.textContent=state.scrap;
   uiKills.textContent=state.kills;
   const nb=state.wave>0?(BOSS_EVERY-(state.wave%BOSS_EVERY))%BOSS_EVERY:BOSS_EVERY;
   uiBossIn.textContent=state.boss?'NOW':(nb===0?BOSS_EVERY:nb);
@@ -5881,10 +5921,11 @@ function syncCompass(){
   for(const p of pickups){ if(p.kind==='crate')mark(p.g.position.x,p.g.position.z,'crate','&#9632;'); else if(p.kind==='item')mark(p.g.position.x,p.g.position.z,'item','&#9670;'); }
   if(state.boss&&!state.boss.dead)mark(state.boss.group.position.x,state.boss.group.position.z,'boss','&#9650;');
   if(state.portalOpen&&state.portal)mark(state.portal.position.x,state.portal.position.z,'portal','&#9679;');
+  if(state.fab)mark(state.fab.pos.x,state.fab.pos.z,'fab','&#9635;');
   compassEl.innerHTML=html;
 }
 /* ---- 26-items.js ---- */
-/* ============================ items ============================ */
+/* ============================ items: give, offers, scrap, Fabricator ============================ */
 function giveItem(id){
   const it=ITEM_BY_ID[id]||ITEMS[Math.floor(Math.random()*ITEMS.length)];
   const before=run.stats.maxHp;
@@ -5897,6 +5938,99 @@ function giveItem(id){
   syncItems(); syncHUD();
 }
 function randomItemId(){ return ITEMS[Math.floor(Math.random()*ITEMS.length)].id; }
+/* ---- rarity roll: a tier by weight (70/25/5), then a random item of that tier. `minTier` raises the floor (Fabricator rare offer). ---- */
+function rollTier(minTier){
+  const min=TIER_ORDER.indexOf(minTier||'common'), pool=TIER_ORDER.slice(min<0?0:min);
+  let tot=0; for(const t of pool)tot+=TIER_W[t]; let r=Math.random()*tot;
+  for(const t of pool){ r-=TIER_W[t]; if(r<=0)return t; } return pool[pool.length-1];
+}
+function rollOffer(minTier,count){
+  const out=[]; let guard=0;
+  while(out.length<(count||3)&&guard++<80){ const tier=rollTier(minTier); const pool=ITEMS.filter(it=>it.tier===tier&&out.indexOf(it.id)<0); if(!pool.length)continue; out.push(pool[Math.floor(Math.random()*pool.length)].id); }
+  return out;
+}
+/* ---- offers: every item the player receives is a choice of one out of three; the simulation pauses behind the card.
+   Desktop: 1 / 2 / 3 (pointer lock is kept, so the hotkeys are the input; Esc re-renders the card with clickable options).
+   Touch: three large tap targets. Gamepad: D-pad / left stick + A (pollOfferPad, driven from frame()). ---- */
+function queueOffer(count,minTier,title){
+  const o=state.offer;
+  if(o&&o.stage==='pick'){ o.left+=count; showOffer(); return; }   // a second pickup while a card is up: one more choice after this one
+  state.offer={stage:'pick',left:count,minTier:minTier||'common',items:rollOffer(minTier),sel:0,title:title||'Supply'};
+  state.running=false; renderOffer();
+}
+function renderOffer(){ const o=state.offer; if(!o)return; if(o.stage==='fab')showFab(); else if(o.stage==='scrapPick')showScrapPick(); else showOffer(); }
+function tierLabel(t){ return t.charAt(0).toUpperCase()+t.slice(1); }
+function optHTML(it,i,sel,extra){ const c=n(it.id);
+  return '<button class="opt t-'+it.tier+(sel?' sel':'')+'" data-i="'+i+'"><span class="tier">'+tierLabel(it.tier)+'</span><b class="code" style="color:'+it.color+'">'+it.code+'</b>'+
+    '<h3>'+it.name+'</h3><p>'+it.desc+'</p><small>'+(extra||(c>0?'held &times;'+c:'new'))+'</small><kbd>'+(i+1)+'</kbd></button>'; }
+function showOffer(){ const o=state.offer;
+  showScreen('<h1>'+o.title+' <span>Drop</span></h1><div class="tag">Choose one'+(o.left>1?' &middot; '+(o.left-1)+' more after this':'')+(TOUCH?' &middot; tap a card':' &middot; press 1 / 2 / 3')+'</div>'+
+    '<div class="offer">'+o.items.map((id,i)=>optHTML(ITEM_BY_ID[id],i,i===o.sel)).join('')+'</div>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>pickOffer(parseInt(el.dataset.i)); });
+}
+function pickOffer(i){ const o=state.offer; if(!o||o.stage!=='pick')return; const id=o.items[i]; if(!id)return;
+  giveItem(id); o.left--;
+  if(o.left>0){ o.items=rollOffer(o.minTier); o.sel=0; showOffer(); return; }
+  closeOffer(); }
+function closeOffer(){ state.offer=null; if(TOUCH||pointerLocked||state.forced)resumePlay(); else enterPlay(); }
+function offerMove(d){ const o=state.offer; if(!o)return; const nOpt=o.stage==='fab'?FAB_OPTS.length:o.items.length; o.sel=(o.sel+d+nOpt)%nOpt; SFX.ui(); renderOffer(); }
+function offerConfirm(){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(o.sel); else if(o.stage==='scrapPick')scrapPick(o.sel); else fabBuy(o.sel); }
+function offerKey(i){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(i); else if(o.stage==='scrapPick')scrapPick(i); else fabBuy(i); }
+
+/* ---- scrap: credited straight to the counter on every kill (no pickup to chase) ---- */
+const SCRAP_VALUE={chaser:3,shooter:5,elite:12,boss:60};
+function addScrap(amount,pos){ if(amount<=0)return; state.scrap+=amount; if(pos)spark(pos,0xffc247,3); }
+
+/* ---- Fabricator: one per stage at a random open cell away from the spawn; E opens a paused card ---- */
+const FAB_OPTS=[
+  {id:'offer', cost:60, name:'Item offer',        desc:'Three candidates, pick one'},
+  {id:'rare',  cost:120,name:'Rare offer',        desc:'Three rare-or-better candidates'},
+  {id:'reroll',cost:200,name:'Reroll a held item',desc:'Scrap one stack of an item you hold, choose a replacement'}
+];
+function spawnFabricator(spawn){
+  state.fab=null; if(!nav.ready)return;
+  const cands=[];
+  for(let k=0;k<60;k++){ const x=(Math.random()*2-1)*(ARENA-5), z=(Math.random()*2-1)*(ARENA-5); const c=navNearestOpen(x,z); if(c<0)continue; navCentre(c,_v1);
+    if(Math.hypot(_v1.x-spawn.x,_v1.z-spawn.z)<10)continue;
+    let clear=true; for(const it of interactables)if(Math.hypot(it.pos.x-_v1.x,it.pos.z-_v1.z)<4)clear=false;
+    if(clear)cands.push(c); }
+  if(!cands.length)return;
+  const p=navCentre(cands[Math.floor(Math.random()*cands.length)],new THREE.Vector3());
+  const g=new THREE.Group();
+  const m=MODELS.ok?spawnProp('desk'):null;
+  if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=1.0/Math.max(sz.y,0.01); m.scale.setScalar(k); m.position.y=-b.min.y*k; g.add(m); }
+  else { const box=new THREE.Mesh(new THREE.BoxGeometry(1.6,1,.8),stdMat(0x2c3745,.6,.4)); box.position.y=.5; box.castShadow=true; g.add(box); }
+  const gl=glowSprite(0xffc247,4); gl.position.y=1.5; g.add(gl);
+  const lab=makeLabel('FABRICATOR','#ffc247',.7); lab.position.y=2.6; g.add(lab);
+  g.position.copy(p); world.add(g);
+  interactables.push({pos:p.clone(),r:2.4,label:'Fabricator 00b7 60 / 120 / 200 scrap',action:openFabricator});
+  state.fab={pos:p.clone(),g:g};
+}
+function openFabricator(){ if(state.offer||state.mode!=='run')return; state.offer={stage:'fab',sel:0,items:[]}; state.running=false; showFab(); }
+function showFab(){ const o=state.offer;
+  showScreen('<h1>Fabricator</h1><div class="tag">Scrap <b style="color:var(--warn)">'+state.scrap+'</b>'+(TOUCH?'':' &middot; 1 / 2 / 3 &middot; Esc to leave')+'</div>'+
+    '<div class="offer fab">'+FAB_OPTS.map((f,i)=>'<button class="opt'+(i===o.sel?' sel':'')+(state.scrap<f.cost?' off':'')+'" data-i="'+i+'"><span class="tier">'+f.cost+' scrap</span><h3>'+f.name+'</h3><p>'+f.desc+'</p><kbd>'+(i+1)+'</kbd></button>').join('')+'</div>'+
+    '<button class="ghost" id="fabLeave">Leave</button>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>fabBuy(parseInt(el.dataset.i)); });
+  $('fabLeave').onclick=closeOffer;
+}
+function fabBuy(i){ const o=state.offer; if(!o||o.stage!=='fab')return; const f=FAB_OPTS[i]; if(!f)return;
+  if(state.scrap<f.cost){ SFX.empty(); return; }
+  if(f.id==='reroll'){ const held=ITEMS.filter(it=>n(it.id)>0); if(!held.length){ SFX.empty(); say('Nothing to reroll'); return; }
+    state.scrap-=f.cost; state.offer={stage:'scrapPick',sel:0,items:held.map(it=>it.id),left:0}; showScrapPick(); return; }
+  state.scrap-=f.cost; SFX.item(); state.offer=null; queueOffer(1,f.id==='rare'?'rare':'common','Fabricator'); syncHUD();
+}
+function showScrapPick(){ const o=state.offer;
+  showScreen('<h1>Scrap an <span>Item</span></h1><div class="tag">One stack is consumed; a new offer follows'+(TOUCH?'':' &middot; 1 &ndash; 9')+'</div>'+
+    '<div class="offer many">'+o.items.map((id,i)=>optHTML(ITEM_BY_ID[id],i,i===o.sel,'held &times;'+n(id))).join('')+'</div>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>scrapPick(parseInt(el.dataset.i)); });
+}
+function scrapPick(i){ const o=state.offer; if(!o||o.stage!=='scrapPick')return; const id=o.items[i]; if(!id)return; removeItemStack(id); state.offer=null; queueOffer(1,'common','Fabricator'); }
+function removeItemStack(id){
+  const before=run.stats.maxHp; run.items[id]=Math.max(0,n(id)-1); if(!run.items[id])delete run.items[id];
+  computeStats(); if(run.stats.maxHp<before)player.hp=Math.min(player.hp,run.stats.maxHp); if(player.mag>run.stats.mag)player.mag=run.stats.mag;
+  say('Scrapped <b>'+ITEM_BY_ID[id].name+'</b>'); syncItems(); syncHUD();
+}
 
 /* ---- 27-characters.js ---- */
 /* ============================ characters ============================ */
@@ -5912,7 +6046,7 @@ function selectChar(i,inLobby){
 /* ---- 28-waves.js ---- */
 /* ============================ waves ============================ */
 function startWave(nw){
-  state.wave=nw;
+  state.wave=nw; state.waveT=0;
   const boss=nw%BOSS_EVERY===0;
   const base=Math.min(4+Math.round(nw*2.2),34);
   state.spawnQueue=boss?Math.round(base*0.5):base;
@@ -5980,7 +6114,7 @@ function bossDefeated(pos){
 }
 function buildStage(stage){
   clearWorld(); if(state.portal){ scene.remove(state.portal); state.portal=null; }
-  const m=stageMap(stage); state.mapId=m.id; m.build();
+  const m=stageMap(stage); state.mapId=m.id; m.build(); spawnFabricator(m.spawn);
   const mod=stageMod(stage); state.mod=mod; state.mods={}; if(mod)state.mods[mod.id]=true;
   state.portalOpen=false; state.boss=null; state.spawnQueue=0; state.waveBreak=0;
   resetPlayerFor('run',m.spawn); player.hp=Math.max(player.hp,run.stats.maxHp*0.6);
@@ -5993,7 +6127,7 @@ function nextStage(){
   SFX.portal(); state.portalOpen=false; stageFadeT=1.0; fadeEl.classList.add('on');
   after(0.5,()=>{
     const hpKeep=player.hp; const m=buildStage(state.stage+1); state.stage++; player.hp=Math.max(hpKeep,player.hp);
-    state.startDelay=3.5; state.stageBanner=true;
+    state.startDelay=6; state.stageBanner=true;   // the long breath after a Warden
     showBanner(m.name,'Stage '+state.stage+' · '+m.sub+(state.mod?' · '+state.mod.name+': '+state.mod.desc:''),true);
     fadeEl.classList.remove('on'); syncHUD();
   });
@@ -6087,13 +6221,14 @@ function killEnemy(e,head){
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
-    say('<b>WARDEN DESTROYED</b> +'+pts,'item'); showBanner('Warden down','Bonus loot',true);
+    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
     state.boss=null; bossDefeated(e.group.position.clone());
   }else{
     SFX.kill();
     spark(e.group.position.clone().setY(1.1),e.type==='shooter'?0xd07bff:0xff7a4d,16);
-    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>');
+    const sc=SCRAP_VALUE[e.elite?'elite':e.type]||0; addScrap(sc,e.group.position.clone().setY(1.2));
+    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>'+(sc?' &middot; '+sc+' scrap':''));
     const r=Math.random();
     if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }
@@ -6273,7 +6408,7 @@ function update(dt){
 
   /* ---- interactables ---- */
   nearInteract=null;
-  if(mode==='lobby'||mode==='range'||(mode==='run'&&state.portalOpen)){
+  if(mode!=='menu'){
     let bd=99;
     for(const it of interactables){ const d=Math.hypot(it.pos.x-player.pos.x,it.pos.z-player.pos.z); if(d<it.r&&d<bd){bd=d;nearInteract=it;} }
     if(nearInteract){ promptTxt.textContent=nearInteract.label; promptEl.classList.add('on'); if(TOUCH){ tInteractTxt.textContent=nearInteract.label; tInteract.classList.add('on'); } }
@@ -6369,21 +6504,21 @@ function update(dt){
     if(mode!=='run')continue;
     e.cd-=dt;
     if(e.type==='chaser'){
-      if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+state.wave*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
+      if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+Math.min(state.wave,22)*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
     }else if(e.type==='shooter'){
       const muzzle=g.position.clone(); muzzle.y+=1.35;
       if(distP<26&&e.cd<=0&&lineOfSight(muzzle,player.pos.clone().add(new THREE.Vector3(0,1.2,0)))){
         e.cd=1.7+Math.random()*0.7; e.shootT=0.5;
         const aim=player.pos.clone().add(new THREE.Vector3(0,1.15,0)).sub(muzzle).normalize();
         aim.x+=(Math.random()-.5)*0.07; aim.y+=(Math.random()-.5)*0.05;
-        shootProjectile(muzzle,aim.normalize(),24,8+state.wave*0.4,0xff86f0,false);
+        shootProjectile(muzzle,aim.normalize(),24,8+Math.min(state.wave,22)*0.4,0xff86f0,false);
         blip({type:'square',f0:900,f1:400,d:.12,v:.1});
       }
     }else if(e.type==='boss'&&e.spawnT<=0){
       if(e.shieldT>0){ e.shieldT-=dt; g.scale.setScalar(e.size*(1+Math.sin(state.t*20)*0.04)); if(e.shieldT<=0)say('Shield down'); }
-      if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; e.attackT=0.6; hurtPlayer(22+state.wave*0.8); }
+      if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; e.attackT=0.6; hurtPlayer(22+Math.min(state.wave,22)*0.8); }
       const burst=()=>{ const m=g.position.clone(); m.y+=1.6; const cnt=12;
-        for(let k=0;k<cnt;k++){ const a=k/cnt*Math.PI*2+state.t; shootProjectile(m,new THREE.Vector3(Math.cos(a),-0.05,Math.sin(a)),13,12+state.wave*0.6,0xffb347,true); }
+        for(let k=0;k<cnt;k++){ const a=k/cnt*Math.PI*2+state.t; shootProjectile(m,new THREE.Vector3(Math.cos(a),-0.05,Math.sin(a)),13,12+Math.min(state.wave,22)*0.6,0xffb347,true); }
         blip({type:'square',f0:400,f1:160,d:.3,v:.16}); shakeCam(0.55,distP); };
       if(e.burstLeft>0){ e.burstT-=dt; if(e.burstT<=0){ burst(); e.burstLeft--; e.burstT=0.38; } }
       e.cd2-=dt;
@@ -6400,12 +6535,13 @@ function update(dt){
 
   /* ---- waves ---- */
   if(mode==='run'){
-    if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(1); spawnTimer=0.5; } }
+    state.waveT+=dt;
+    if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(state.wave+1); spawnTimer=0.5; } }
     else if(state.spawnQueue>0){
       spawnTimer-=dt;
       if(spawnTimer<=0&&enemies.length<16){ spawnOne(); spawnTimer=0.35; syncHUD(); }
     }else if(enemies.length===0&&!state.portalOpen){
-      if(state.waveBreak===0){ waveCleared(); state.waveBreak=4.5; }
+      if(state.waveBreak===0){ waveCleared(); state.waveBreak=state.waveT<20?2.5:4.5; }   // a fast clear earns a shorter breath
       state.waveBreak-=dt;
       if(state.waveBreak<=0){ state.waveBreak=0; startWave(state.wave+1); spawnTimer=0.6; }
     }
@@ -6453,7 +6589,7 @@ function update(dt){
     p.t-=dt;
     if(p.g.position.distanceTo(player.pos.clone().setY(p.g.position.y))<1.35){
       if(p.kind==='heal'){ player.hp=Math.min(s.maxHp,player.hp+Math.round(s.maxHp*.28)); SFX.pick(); say('Repair kit <b>+'+Math.round(s.maxHp*.28)+'</b>'); }
-      else { for(let q=0;q<(p.items||1);q++)giveItem(randomItemId()); }
+      else queueOffer(p.items||1);   // every item is the player's pick, never an auto-roll
       scene.remove(p.g); pickups.splice(i,1); syncHUD(); continue;
     }
     if(p.t<=0){ scene.remove(p.g); pickups.splice(i,1); }
@@ -6484,6 +6620,7 @@ function frame(now){
   const raw=(now-last)/1000; last=now;
   const dt=Math.min(0.25,raw);
   perf.animLod=0;
+  if(state.offer&&!state.running)pollOfferPad();
   if(state.running){
     acc+=dt; let steps=0;
     while(acc>=STEP&&steps<8){ update(STEP); acc-=STEP; steps++; }
@@ -6527,7 +6664,7 @@ function resetPlayerFor(mode,pos){
 }
 function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); }
 function goLobby(){
-  clearTimers();
+  clearTimers(); state.offer=null; state.fab=null;
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildLobby(); setMode('lobby');
   resetPlayerFor('lobby',new THREE.Vector3(0,0,6));
@@ -6536,7 +6673,7 @@ function goLobby(){
   SFX.portal(); syncHUD();
 }
 function goRange(){
-  clearTimers();
+  clearTimers(); state.offer=null; state.fab=null;
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildRange(); setMode('range');
   run.items={}; computeStats(); syncItems();
@@ -6551,7 +6688,7 @@ function goRun(seed){
   run.order=makeRunOrder(state.seed);
   run.items={}; run.itemsTaken=0; computeStats(); syncItems();
   state.score=0; state.kills=0; state.over=false; state.waveBreak=0; state.t=0; state.wave=0;
-  state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1;
+  state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1; state.scrap=0; state.offer=null; state.waveT=0;
   if(state.portal){ scene.remove(state.portal); state.portal=null; }
   setMode('run'); buildStage(1); player.hp=run.stats.maxHp;
   SFX.portal(); showBanner(CH().name+' deployed','Stage 1 · '+stageMap(1).name); syncHUD();
@@ -6577,6 +6714,10 @@ addEventListener('keydown',e=>{
   if(k==='shift')keys.shift=true;
   if(k===' '){keys.space=true;e.preventDefault();}
   if(k==='`'||k==='~')toggleDebug();
+  if(state.offer&&!state.running){   // offer / Fabricator card: number keys choose, Esc / Tab leave the Fabricator
+    if(/^[1-9]$/.test(k))offerKey(parseInt(k)-1);
+    else if((k==='escape'||k==='tab')&&state.offer.stage==='fab'){ e.preventDefault(); closeOffer(); }
+    return; }
   if(!state.running)return;
   if(k==='r')startReload();
   if(k==='q')useAbility();
@@ -6607,9 +6748,11 @@ addEventListener('mousemove',e=>{
 document.addEventListener('pointerlockchange',()=>{
   pointerLocked=(document.pointerLockElement===canvas);
   if(pointerLocked){
-    if(!state.over&&state.mode!=='menu')resumePlay();
+    if(state.offer)renderOffer();                     // relocked while a card is up: keep the card, do not resume
+    else if(!state.over&&state.mode!=='menu')resumePlay();
   }else{
     keys.mouse=false; keys.aim=false;
+    if(state.offer){ renderOffer(); return; }         // Esc during a card: re-render it with a usable mouse
     if(state.running&&!state.over){ state.running=false; if(state.mode==='lobby')showLobbyPanel(); else showPause(); }
   }
 });
@@ -6750,8 +6893,10 @@ function showSettings(back){
   $('back').onclick=back;
 }
 function showCodex(){
-  showScreen('<h1>Item <span>Codex</span></h1><div class="tag">All items stack &middot; dropped by crates, enemies and Wardens</div>'+
-    '<div class="itemlist">'+ITEMS.map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+it.name+'</b> — '+it.desc+'</div>').join('')+'</div>'+
+  const group=t=>'<div class="tierhead" style="color:'+TIER_CSS[t]+'">'+tierLabel(t)+' &middot; '+TIER_W[t]+'%</div><div class="itemlist">'+
+    ITEMS.filter(it=>it.tier===t).map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+it.name+'</b> — '+it.desc+'</div>').join('')+'</div>';
+  showScreen('<h1>Item <span>Codex</span></h1><div class="tag">Every item is a pick of one from three &middot; crates, drops, Wardens, the Fabricator</div>'+
+    group('legendary')+group('rare')+group('common')+
     '<button class="ghost" id="back">Back</button>');
   $('back').onclick=showMenu;
 }
@@ -6779,7 +6924,8 @@ function showPause(){
    (isRun?'<div class="tag" style="margin-top:10px">Stage '+state.stage+' · '+stageMap(state.stage).name+(state.mod?' · '+state.mod.name+' — '+state.mod.desc:'')+' · seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
    '<div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
-   '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div></div>'+inventoryHTML():controlsHTML())+
+   '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div>'+
+   '<div><div class="k">Scrap</div><div class="v">'+state.scrap+'</div></div></div>'+inventoryHTML():controlsHTML())+
    '<button id="go">Resume</button>'+
    '<div class="btns"><button id="lob" class="ghost">'+(isRun?'Abandon run &middot; lobby':'Return to lobby')+'</button><button id="menu" class="ghost">Main menu</button></div>'+
    '<button id="settings" class="ghost">Settings</button>');
@@ -6817,7 +6963,8 @@ window.__ARENA__={applyLook:applyLook,camYaw:camYaw,barrels:barrels,explodeBarre
   computeStats:computeStats,selectChar:selectChar,giveItem:giveItem,useAbility:useAbility,goLobby:goLobby,goRange:goRange,goRun:goRun,
   startWave:startWave,pickups:pickups,targets:targets,interactables:interactables,perf:perf,Q:Q,setQuality:setQuality,renderer:renderer,toggleDebug:toggleDebug,inp:inp,touch:touch,pad:pad,TOUCH:TOUCH,nav:nav,MAPS:MAPS,buildStage:buildStage,nextStage:nextStage,mapData:mapData,stageMap:stageMap,navPath:navPath,navNearestOpen:navNearestOpen,bossDefeated:bossDefeated,MODELS:MODELS,SETTINGS:SETTINGS,showSettings:showSettings,spawnCharacter:spawnCharacter,GUN_MOUNT:GUN_MOUNT,avatar:avatar,podDisplays:podDisplays,makeEnemy:makeEnemy,avatarAnim:function(){return avatarAnim;},corpses:corpses,
   timers:timers,after:after,rayWorld:rayWorld,castShot:castShot,hurtPlayer:hurtPlayer,killEnemy:killEnemy,dealDamage:dealDamage,
-  forceStart:function(mode){ audio(); (mode==='lobby'?goLobby:mode==='range'?goRange:goRun)(); state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); }};
+  queueOffer:queueOffer,pickOffer:pickOffer,offerKey:offerKey,closeOffer:closeOffer,openFabricator:openFabricator,fabBuy:fabBuy,scrapPick:scrapPick,rollOffer:rollOffer,addScrap:addScrap,spawnFabricator:spawnFabricator,
+  forceStart:function(mode){ state.forced=true; audio(); (mode==='lobby'?goLobby:mode==='range'?goRange:goRun)(); state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); }};
 })();
 </script>
 <script>if("serviceWorker" in navigator){addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(e=>console.warn("service worker registration failed",e));});}</script>

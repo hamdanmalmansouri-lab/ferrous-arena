@@ -124,7 +124,7 @@ function update(dt){
 
   /* ---- interactables ---- */
   nearInteract=null;
-  if(mode==='lobby'||mode==='range'||(mode==='run'&&state.portalOpen)){
+  if(mode!=='menu'){
     let bd=99;
     for(const it of interactables){ const d=Math.hypot(it.pos.x-player.pos.x,it.pos.z-player.pos.z); if(d<it.r&&d<bd){bd=d;nearInteract=it;} }
     if(nearInteract){ promptTxt.textContent=nearInteract.label; promptEl.classList.add('on'); if(TOUCH){ tInteractTxt.textContent=nearInteract.label; tInteract.classList.add('on'); } }
@@ -220,21 +220,21 @@ function update(dt){
     if(mode!=='run')continue;
     e.cd-=dt;
     if(e.type==='chaser'){
-      if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+state.wave*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
+      if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+Math.min(state.wave,22)*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
     }else if(e.type==='shooter'){
       const muzzle=g.position.clone(); muzzle.y+=1.35;
       if(distP<26&&e.cd<=0&&lineOfSight(muzzle,player.pos.clone().add(new THREE.Vector3(0,1.2,0)))){
         e.cd=1.7+Math.random()*0.7; e.shootT=0.5;
         const aim=player.pos.clone().add(new THREE.Vector3(0,1.15,0)).sub(muzzle).normalize();
         aim.x+=(Math.random()-.5)*0.07; aim.y+=(Math.random()-.5)*0.05;
-        shootProjectile(muzzle,aim.normalize(),24,8+state.wave*0.4,0xff86f0,false);
+        shootProjectile(muzzle,aim.normalize(),24,8+Math.min(state.wave,22)*0.4,0xff86f0,false);
         blip({type:'square',f0:900,f1:400,d:.12,v:.1});
       }
     }else if(e.type==='boss'&&e.spawnT<=0){
       if(e.shieldT>0){ e.shieldT-=dt; g.scale.setScalar(e.size*(1+Math.sin(state.t*20)*0.04)); if(e.shieldT<=0)say('Shield down'); }
-      if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; e.attackT=0.6; hurtPlayer(22+state.wave*0.8); }
+      if(distP<3.2&&dy<2&&e.cd<=0){ e.cd=1.0; e.attackT=0.6; hurtPlayer(22+Math.min(state.wave,22)*0.8); }
       const burst=()=>{ const m=g.position.clone(); m.y+=1.6; const cnt=12;
-        for(let k=0;k<cnt;k++){ const a=k/cnt*Math.PI*2+state.t; shootProjectile(m,new THREE.Vector3(Math.cos(a),-0.05,Math.sin(a)),13,12+state.wave*0.6,0xffb347,true); }
+        for(let k=0;k<cnt;k++){ const a=k/cnt*Math.PI*2+state.t; shootProjectile(m,new THREE.Vector3(Math.cos(a),-0.05,Math.sin(a)),13,12+Math.min(state.wave,22)*0.6,0xffb347,true); }
         blip({type:'square',f0:400,f1:160,d:.3,v:.16}); shakeCam(0.55,distP); };
       if(e.burstLeft>0){ e.burstT-=dt; if(e.burstT<=0){ burst(); e.burstLeft--; e.burstT=0.38; } }
       e.cd2-=dt;
@@ -251,12 +251,13 @@ function update(dt){
 
   /* ---- waves ---- */
   if(mode==='run'){
-    if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(1); spawnTimer=0.5; } }
+    state.waveT+=dt;
+    if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(state.wave+1); spawnTimer=0.5; } }
     else if(state.spawnQueue>0){
       spawnTimer-=dt;
       if(spawnTimer<=0&&enemies.length<16){ spawnOne(); spawnTimer=0.35; syncHUD(); }
     }else if(enemies.length===0&&!state.portalOpen){
-      if(state.waveBreak===0){ waveCleared(); state.waveBreak=4.5; }
+      if(state.waveBreak===0){ waveCleared(); state.waveBreak=state.waveT<20?2.5:4.5; }   // a fast clear earns a shorter breath
       state.waveBreak-=dt;
       if(state.waveBreak<=0){ state.waveBreak=0; startWave(state.wave+1); spawnTimer=0.6; }
     }
@@ -304,7 +305,7 @@ function update(dt){
     p.t-=dt;
     if(p.g.position.distanceTo(player.pos.clone().setY(p.g.position.y))<1.35){
       if(p.kind==='heal'){ player.hp=Math.min(s.maxHp,player.hp+Math.round(s.maxHp*.28)); SFX.pick(); say('Repair kit <b>+'+Math.round(s.maxHp*.28)+'</b>'); }
-      else { for(let q=0;q<(p.items||1);q++)giveItem(randomItemId()); }
+      else queueOffer(p.items||1);   // every item is the player's pick, never an auto-roll
       scene.remove(p.g); pickups.splice(i,1); syncHUD(); continue;
     }
     if(p.t<=0){ scene.remove(p.g); pickups.splice(i,1); }
@@ -335,6 +336,7 @@ function frame(now){
   const raw=(now-last)/1000; last=now;
   const dt=Math.min(0.25,raw);
   perf.animLod=0;
+  if(state.offer&&!state.running)pollOfferPad();
   if(state.running){
     acc+=dt; let steps=0;
     while(acc>=STEP&&steps<8){ update(STEP); acc-=STEP; steps++; }

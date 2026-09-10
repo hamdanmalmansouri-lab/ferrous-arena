@@ -1,6 +1,6 @@
 /* ============================ constants ============================ */
 const PLAYER_R=0.42, EYE=1.62, GRAV=22, JUMP=7.6;
-const REGEN_DELAY=5, REGEN_RATE=6;
+const REGEN_DELAY=5, REGEN_RATE=4;
 const BOSS_EVERY=5;
 const MELEE_TOKENS=3;             // chasers allowed in the attack state at once; the rest orbit
 /* gameplay timers: ticked from update(dt) so they pause with the simulation (never setTimeout for gameplay) */

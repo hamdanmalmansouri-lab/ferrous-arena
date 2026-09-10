@@ -11,15 +11,15 @@ function n(id){ return run.items[id]||0; }
 function computeStats(){
   const b=CH().base;
   const s={
-    maxHp: b.hp+20*n('plating'),
+    maxHp: b.hp+20*n('plating')+35*n('reactor'),
     speed: b.speed*(1+0.10*n('servo')),
     sprint: b.sprint*(1+0.10*n('servo')),
-    dmg: b.dmg*(1+0.10*n('rounds')),
-    fireT: b.fireT/(1+0.12*n('syringe')),
+    dmg: b.dmg*(1+0.10*n('rounds')+0.08*n('overclock')),
+    fireT: b.fireT/(1+0.12*n('syringe')+0.15*n('overclock')),
     mag: Math.round(b.mag*(1+0.25*n('extmag'))),
     reloadT: b.reloadT*Math.pow(0.85,n('loader')),
     crit: Math.min(1,0.05+0.10*n('lens')),
-    regen: 1.2*n('regen'),
+    regen: 1.2*n('regen')+1*n('reactor'),
     cdMult: Math.max(0.45,Math.pow(0.88,n('capacitor'))),
     lifesteal: 0.03*n('coil'),
     pellets:b.pellets, spread:b.spread, headMult:b.headMult, recoil:b.recoil

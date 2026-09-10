@@ -61,8 +61,8 @@ function finishEnemy(g,type,wave,animator,bones,model,modelScale){
   const headHit=new THREE.Mesh(GEO_HEADHIT,MAT_HIDDEN);
   headHit.position.y=1.79; g.add(headHit);
 
-  const scale=wave>0?(1+wave*0.035):1;
-  let hp=(34+wave*9)*scale, speed=(type==='shooter'?2.9:4.05)+Math.min(wave*0.16,2.0);
+  const scale=wave>0?(1+wave*0.018):1;   // v3: flatter curve — item choice + scrap carry the power instead of raw HP
+  let hp=(34+wave*8)*scale, speed=(type==='shooter'?2.9:4.05)+Math.min(wave*0.16,2.0);
   if(type==='boss'){ hp=(700+wave*140)*scale; speed=3.4+Math.min(wave*0.05,1.2); }
   if(type==='dummy'){ hp=260; speed=1.4; }
   const e={
