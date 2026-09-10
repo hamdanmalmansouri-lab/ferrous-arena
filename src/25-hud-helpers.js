@@ -12,7 +12,8 @@ function popHit(kill,crit){
 }
 function syncItems(){
   let h='';
-  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0)h+='<div class="it t-'+it.tier+'" title="'+it.name+' ('+it.tier+'): '+it.desc+'" style="color:'+it.color+';border-color:'+TIER_CSS[it.tier]+'">'+it.code+'<small>'+c+'</small></div>'; });
+  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0){ const ev=run.evos[it.id]?EVOS[it.id]:null;
+    h+='<div class="it t-'+(ev?'legendary evo':it.tier)+'" title="'+(ev?ev.name+': '+ev.desc:it.name+' ('+it.tier+'): '+it.desc)+'" style="color:'+it.color+';border-color:'+(ev?TIER_CSS.legendary:TIER_CSS[it.tier])+'">'+it.code+(ev?'<u>&#9733;</u>':'')+'<small>'+c+'</small></div>'; } });
   itemsEl.innerHTML=h;
 }
 function syncHUD(){
@@ -35,7 +36,8 @@ function syncHUD(){
   abName.textContent=ab.name;
   if(player.abActive>0){ abKey.className='key active'; abFill.style.height='100%'; abState.textContent='Active '+player.abActive.toFixed(1)+'s'; }
   else if(player.abCd>0){ abKey.className='key'; abFill.style.height=((1-player.abCd/(ab.cd*s.cdMult))*100)+'%'; abState.textContent=player.abCd.toFixed(1)+'s'; }
-  else { abKey.className='key ready'; abFill.style.height='100%'; abState.textContent='Ready'; }
+  else { abKey.className='key ready'; abFill.style.height='100%'; abState.textContent=player.abStock>1?'Ready x'+player.abStock:'Ready'; }
+  if(player.abCd>0&&player.abStock>0&&player.abActive<=0){ abKey.className='key ready'; abState.textContent='x'+player.abStock+' \u00b7 '+player.abCd.toFixed(1)+'s'; }
   syncTouchHUD(); syncCompass();
   /* boss */
   if(state.boss&&!state.boss.dead){ bossbar.classList.add('on'); const pc=Math.max(0,state.boss.hp/state.boss.maxHp*100); bossFill.style.width=pc+'%'; bossHpEl.textContent=Math.ceil(pc)+'%'; }

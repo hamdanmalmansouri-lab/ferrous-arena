@@ -82,6 +82,7 @@ function nextStage(){
   after(0.5,()=>{
     const hpKeep=player.hp; const m=buildStage(state.stage+1); state.stage++; player.hp=Math.max(hpKeep,player.hp);
     state.startDelay=6; state.stageBanner=true;   // the long breath after a Warden
+    if(state.stage===3&&!run.asc)after(1.3,()=>offerAscension());   // stage 3: choose the ascension
     showBanner(m.name,'Stage '+state.stage+' · '+m.sub+(state.mod?' · '+state.mod.name+': '+state.mod.desc:''),true);
     fadeEl.classList.remove('on'); syncHUD();
   });

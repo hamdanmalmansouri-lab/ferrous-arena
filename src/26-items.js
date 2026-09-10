@@ -31,7 +31,7 @@ function queueOffer(count,minTier,title){
   state.offer={stage:'pick',left:count,minTier:minTier||'common',items:rollOffer(minTier),sel:0,title:title||'Supply'};
   state.running=false; renderOffer();
 }
-function renderOffer(){ const o=state.offer; if(!o)return; if(o.stage==='fab')showFab(); else if(o.stage==='scrapPick')showScrapPick(); else showOffer(); }
+function renderOffer(){ const o=state.offer; if(!o)return; if(o.stage==='fab')showFab(); else if(o.stage==='scrapPick')showScrapPick(); else if(o.stage==='forge')showForge(); else if(o.stage==='asc')showAsc(); else showOffer(); }
 function tierLabel(t){ return t.charAt(0).toUpperCase()+t.slice(1); }
 function optHTML(it,i,sel,extra){ const c=n(it.id);
   return '<button class="opt t-'+it.tier+(sel?' sel':'')+'" data-i="'+i+'"><span class="tier">'+tierLabel(it.tier)+'</span><b class="code" style="color:'+it.color+'">'+it.code+'</b>'+
@@ -47,8 +47,8 @@ function pickOffer(i){ const o=state.offer; if(!o||o.stage!=='pick')return; cons
   closeOffer(); }
 function closeOffer(){ state.offer=null; if(TOUCH||pointerLocked||state.forced)resumePlay(); else enterPlay(); }
 function offerMove(d){ const o=state.offer; if(!o)return; const nOpt=o.stage==='fab'?FAB_OPTS.length:o.items.length; o.sel=(o.sel+d+nOpt)%nOpt; SFX.ui(); renderOffer(); }
-function offerConfirm(){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(o.sel); else if(o.stage==='scrapPick')scrapPick(o.sel); else fabBuy(o.sel); }
-function offerKey(i){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(i); else if(o.stage==='scrapPick')scrapPick(i); else fabBuy(i); }
+function offerConfirm(){ offerKey(state.offer?state.offer.sel:0); }
+function offerKey(i){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(i); else if(o.stage==='scrapPick')scrapPick(i); else if(o.stage==='forge')fuse(i); else if(o.stage==='asc')pickAsc(i); else fabBuy(i); }
 
 /* ---- scrap: credited straight to the counter on every kill (no pickup to chase) ---- */
 const SCRAP_VALUE={chaser:3,shooter:5,elite:12,boss:60};
@@ -58,7 +58,8 @@ function addScrap(amount,pos){ if(amount<=0)return; state.scrap+=amount; if(pos)
 const FAB_OPTS=[
   {id:'offer', cost:60, name:'Item offer',        desc:'Three candidates, pick one'},
   {id:'rare',  cost:120,name:'Rare offer',        desc:'Three rare-or-better candidates'},
-  {id:'reroll',cost:200,name:'Reroll a held item',desc:'Scrap one stack of an item you hold, choose a replacement'}
+  {id:'reroll',cost:200,name:'Reroll a held item',desc:'Scrap one stack of an item you hold, choose a replacement'},
+  {id:'forge', cost:0,  name:'Forge',             desc:'Fuse an item you hold at 5 stacks into its evolution (spends a Forge Core)'}
 ];
 function spawnFabricator(spawn){
   state.fab=null; if(!nav.ready)return;
@@ -82,12 +83,14 @@ function spawnFabricator(spawn){
 function openFabricator(){ if(state.offer||state.mode!=='run')return; state.offer={stage:'fab',sel:0,items:[]}; state.running=false; showFab(); }
 function showFab(){ const o=state.offer;
   showScreen('<h1>Fabricator</h1><div class="tag">Scrap <b style="color:var(--warn)">'+state.scrap+'</b>'+(TOUCH?'':' &middot; 1 / 2 / 3 &middot; Esc to leave')+'</div>'+
-    '<div class="offer fab">'+FAB_OPTS.map((f,i)=>'<button class="opt'+(i===o.sel?' sel':'')+(state.scrap<f.cost?' off':'')+'" data-i="'+i+'"><span class="tier">'+f.cost+' scrap</span><h3>'+f.name+'</h3><p>'+f.desc+'</p><kbd>'+(i+1)+'</kbd></button>').join('')+'</div>'+
+    '<div class="offer fab">'+FAB_OPTS.map((f,i)=>{ const forge=f.id==='forge', can=forge?(state.cores>0&&forgeEligible().length>0):state.scrap>=f.cost;
+      return '<button class="opt'+(i===o.sel?' sel':'')+(can?'':' off')+(forge?' t-legendary':'')+'" data-i="'+i+'"><span class="tier">'+(forge?state.cores+' core'+(state.cores===1?'':'s'):f.cost+' scrap')+'</span><h3>'+f.name+'</h3><p>'+f.desc+'</p><kbd>'+(i+1)+'</kbd></button>'; }).join('')+'</div>'+
     '<button class="ghost" id="fabLeave">Leave</button>',true);
   card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>fabBuy(parseInt(el.dataset.i)); });
   $('fabLeave').onclick=closeOffer;
 }
 function fabBuy(i){ const o=state.offer; if(!o||o.stage!=='fab')return; const f=FAB_OPTS[i]; if(!f)return;
+  if(f.id==='forge'){ if(!openForge()){ SFX.empty(); say(state.cores>0?'Nothing at 5 stacks to fuse':'No Forge Core','warn'); } return; }
   if(state.scrap<f.cost){ SFX.empty(); return; }
   if(f.id==='reroll'){ const held=ITEMS.filter(it=>n(it.id)>0); if(!held.length){ SFX.empty(); say('Nothing to reroll'); return; }
     state.scrap-=f.cost; state.offer={stage:'scrapPick',sel:0,items:held.map(it=>it.id),left:0}; showScrapPick(); return; }
@@ -104,3 +107,29 @@ function removeItemStack(id){
   computeStats(); if(run.stats.maxHp<before)player.hp=Math.min(player.hp,run.stats.maxHp); if(player.mag>run.stats.mag)player.mag=run.stats.mag;
   say('Scrapped <b>'+ITEM_BY_ID[id].name+'</b>'); syncItems(); syncHUD();
 }
+/* ---- Forge Cores: a Warden drops one; spend it at FUSE_STACKS of a single item to fuse that item into its evolution ---- */
+function forgeEligible(){ return ITEMS.filter(it=>EVOS[it.id]&&n(it.id)>=FUSE_STACKS&&!run.evos[it.id]).map(it=>it.id); }
+function addCore(){ state.cores++; SFX.item(); say('<b>Forge Core</b> recovered &middot; fuse an item at '+FUSE_STACKS+' stacks','item'); syncHUD(); }
+function openForge(){ const el=forgeEligible(); if(state.cores<=0||!el.length||state.mode!=='run')return false;
+  state.offer={stage:'forge',sel:0,items:el}; state.running=false; showForge(); return true; }
+function showForge(){ const o=state.offer;
+  showScreen('<h1>Forge <span>Core</span></h1><div class="tag">'+state.cores+' core'+(state.cores===1?'':'s')+' &middot; fuse one item into its evolution'+(TOUCH?'':' &middot; 1 &ndash; 9, Esc to keep the core')+'</div>'+
+    '<div class="offer many">'+o.items.map((id,i)=>{ const it=ITEM_BY_ID[id], ev=EVOS[id];
+      return '<button class="opt t-legendary'+(i===o.sel?' sel':'')+'" data-i="'+i+'"><span class="tier">Fuse '+it.name+' &times;'+n(id)+'</span><b class="code" style="color:'+it.color+'">'+it.code+'</b><h3>'+ev.name+'</h3><p>'+ev.desc+'</p><kbd>'+(i+1)+'</kbd></button>'; }).join('')+'</div>'+
+    '<button class="ghost" id="forgeLater">Keep the core</button>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>fuse(parseInt(el.dataset.i)); }); $('forgeLater').onclick=closeOffer;
+}
+function fuse(i){ const o=state.offer; if(!o||o.stage!=='forge')return; const id=o.items[i]; if(!id||state.cores<=0)return;
+  state.cores--; run.evos[id]=true; computeStats(); if(id==='capacitor')player.abStock=Math.min(run.stats.abStock,player.abStock+1);
+  const ev=EVOS[id]; SFX.item(); say('<b>'+ev.name+'</b> forged from '+ITEM_BY_ID[id].name,'item'); showBanner(ev.name,ev.desc,true); syncItems(); syncHUD();
+  state.offer=null; closeOffer(); }
+/* ---- ascensions: offered once, on entering stage 3 ---- */
+function offerAscension(){ const opts=ASCENSIONS[CH().id]; if(!opts||run.asc||state.mode!=='run')return false;
+  state.offer={stage:'asc',sel:0,items:opts.map(a=>a.id)}; state.running=false; showAsc(); return true; }
+function showAsc(){ const o=state.offer, opts=ASCENSIONS[CH().id];
+  showScreen('<h1>Ascension</h1><div class="tag">'+CH().name+' &middot; one permanent mutation for this run'+(TOUCH?'':' &middot; press 1 / 2')+'</div>'+
+    '<div class="offer two">'+opts.map((a,i)=>'<button class="opt t-rare'+(i===o.sel?' sel':'')+'" data-i="'+i+'"><span class="tier">'+CH().ability.name+' mutation</span><h3>'+a.name+'</h3><p>'+a.desc+'</p><kbd>'+(i+1)+'</kbd></button>').join('')+'</div>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>pickAsc(parseInt(el.dataset.i)); });
+}
+function pickAsc(i){ const o=state.offer; if(!o||o.stage!=='asc')return; const a=ASCENSIONS[CH().id][i]; if(!a)return;
+  run.asc=a.id; SFX.ability(); say('<b>'+a.name+'</b> &middot; '+a.desc,'item'); showBanner(a.name,'Ascended',true); syncHUD(); state.offer=null; closeOffer(); }

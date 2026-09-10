@@ -77,6 +77,10 @@ function showCodex(){
     ITEMS.filter(it=>it.tier===t).map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+it.name+'</b> — '+it.desc+'</div>').join('')+'</div>';
   showScreen('<h1>Item <span>Codex</span></h1><div class="tag">Every item is a pick of one from three &middot; crates, drops, Wardens, the Fabricator</div>'+
     group('legendary')+group('rare')+group('common')+
+    '<div class="tierhead" style="color:var(--gold)">Evolutions &middot; fuse an item at '+FUSE_STACKS+' stacks with a Forge Core (Wardens drop one)</div><div class="itemlist">'+
+    ITEMS.filter(it=>EVOS[it.id]).map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+EVOS[it.id].name+'</b> — '+EVOS[it.id].desc+'</div>').join('')+'</div>'+
+    '<div class="tierhead" style="color:var(--accent)">Ascensions &middot; one permanent mutation at stage 3, per run</div><div class="itemlist">'+
+    CHARS.map(c=>ASCENSIONS[c.id]?ASCENSIONS[c.id].map(a=>'<div><b style="color:'+c.css+'">'+c.name+'</b> &nbsp;<b>'+a.name+'</b> — '+a.desc+'</div>').join(''):'').join('')+'</div>'+
     '<button class="ghost" id="back">Back</button>');
   $('back').onclick=showMenu;
 }

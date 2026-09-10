@@ -2,7 +2,7 @@
 function resetPlayerFor(mode,pos){
   player.pos.copy(pos); player.vel.set(0,0,0); player.yaw=0; player.pitch=-0.06; player.orbit=0; player.aimK=0;
   player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.reloading=0; player.recoil=0; player.lastHurt=99;
-  player.alive=true; player.abCd=0; player.abActive=0; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
+  player.alive=true; player.abCd=0; player.abActive=0; player.abStock=run.stats.abStock||1; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');
 }
 function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); }
@@ -29,7 +29,8 @@ function goRun(seed){
   const qs=/[?&]seed=(\d+)/.exec(location.search);
   state.seed=seed||(qs?parseInt(qs[1]):(Date.now()%1e9));
   run.order=makeRunOrder(state.seed);
-  run.items={}; run.itemsTaken=0; computeStats(); syncItems();
+  run.items={}; run.itemsTaken=0; run.evos={}; run.asc=null; computeStats(); syncItems();
+  state.cores=0; state.evoFired={}; state.ascFired={}; player.adrenal=0; player.adrenalT=0; player.kineticT=0; player.hemoT=0; player.siegeT=0; player.freeAmmoT=0; player.shotIdx=0; player.naniteFired=false;
   state.score=0; state.kills=0; state.over=false; state.waveBreak=0; state.t=0; state.wave=0;
   state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1; state.scrap=0; state.offer=null; state.waveT=0;
   if(state.portal){ scene.remove(state.portal); state.portal=null; }

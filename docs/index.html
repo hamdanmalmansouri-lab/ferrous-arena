@@ -72,6 +72,8 @@
              display:flex;align-items:center;justify-content:center;font:700 var(--label)/1 ui-monospace,Menlo,monospace;letter-spacing:.02em}
   #items .it small{position:absolute;right:-5px;bottom:-5px;background:var(--txt);color:#0a0d14;border-radius:8px;padding:1px 5px;font:700 10px/1.3 "Inter",system-ui,sans-serif}
   #items .it.t-legendary{box-shadow:0 0 10px rgba(255,209,102,.35)}
+  #items .it u{position:absolute;left:-4px;top:-6px;text-decoration:none;color:var(--gold);font-size:10px}
+  .offer.two{grid-template-columns:repeat(2,1fr)}
 
   /* bottom-right: magazine as the hero number, the capacity small beside it */
   #ammo{right:calc(var(--g)*3);bottom:calc(var(--g)*3);padding:calc(var(--g)*2);min-width:168px}
@@ -4714,6 +4716,30 @@ const ITEM_BY_ID={}; ITEMS.forEach(it=>ITEM_BY_ID[it.id]=it);
 const TIER_ORDER=['common','rare','legendary'];
 const TIER_W={common:70,rare:25,legendary:5};
 const TIER_CSS={common:'#8fa2bd',rare:'#4ea8ff',legendary:'#ffd166'};
+/* ---- evolutions: fuse an item at FUSE_STACKS with a Forge Core (Wardens drop one). Hooks live in tryFire / dealDamage / killEnemy / update. ---- */
+const FUSE_STACKS=5;
+const EVOS={
+  syringe:   {id:'adrenal',    name:'Adrenal Cascade',desc:'Kills grant +30% fire rate for 3 s, stacking up to x3'},
+  plating:   {id:'weave',      name:'Ablative Weave', desc:'Overshield worth 25% of max health; refills after 8 s without damage'},
+  servo:     {id:'kinetic',    name:'Kinetic Drive',  desc:'+40% damage for 2 s after a sprint'},
+  lens:      {id:'fracture',   name:'Fracture Optic', desc:'Crits ricochet to a second enemy within 8 m for 60%'},
+  rounds:    {id:'railcore',   name:'Railcore',       desc:'Every 6th shot pierces for 250%'},
+  extmag:    {id:'beltfeed',   name:'Belt Feed',      desc:'+50% damage from the last 25% of the magazine'},
+  loader:    {id:'hotswap',    name:'Hot Swap',       desc:'1.5 s of free ammo after every reload'},
+  regen:     {id:'nanite',     name:'Nanite Bloom',   desc:'A 3 m regen aura that never stops in combat; overheal becomes shield'},
+  capacitor: {id:'overcharge', name:'Overcharge Cell',desc:'A second ability charge'},
+  coil:      {id:'hemolattice',name:'Hemolattice',    desc:'Lifesteal counts overkill; kills grant +8% speed for 2 s'}
+};
+const EVO_BY_ID={}; for(const k in EVOS)EVO_BY_ID[EVOS[k].id]=k;
+/* ---- ascensions: one permanent ability mutation per operative, chosen at stage 3, kept for the run only ---- */
+const ASCENSIONS={
+  vanguard:[{id:'siege',      name:'Siege Mode',  desc:'Standing still for 0.5 s: +35% damage and half the spread'},
+            {id:'warcry',     name:'Warcry',      desc:'Overdrive also cuts incoming damage by 30% and heals 15% of max health over its duration'}],
+  ranger:  [{id:'ghost',      name:'Ghost Step',  desc:'Blink grants 1.2 s of invulnerability, finishes the reload and cools down 40% faster'},
+            {id:'executioner',name:'Executioner', desc:'Headshots deal +50% and kill any non-Warden under 35% health outright'}],
+  bulwark: [{id:'bastion',    name:'Bastion',     desc:'Barrier absorbs 100% of max health but slows you by 30% while it holds'},
+            {id:'riot',       name:'Riot Charge', desc:'Raising Barrier knocks enemies within 4 m back and stuns them for 1.5 s'}]
+};
 
 /* ---- 14-dom.js ---- */
 /* ============================ dom ============================ */
@@ -5392,9 +5418,13 @@ function stageMod(stage){ return stage<2?null:MODS.find(m=>m.id===run.order.mods
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0,
+  adrenal:0, adrenalT:0, kineticT:0, sprintT:0, hemoT:0, siegeT:0, freeAmmoT:0, shotIdx:0, abStock:1, naniteFired:false
 };
-const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
+const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null, evos:{}, asc:null};
+function evo(itemId){ return !!run.evos[itemId]; }
+function asc(id){ return run.asc===id; }
+function fired(id){ const t=id in EVO_BY_ID?state.evoFired:state.ascFired; t[id]=(t[id]||0)+1; }   // harness evidence that an evolution / ascension did something
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
 function CH(){ return CHARS[run.charIdx]; }
 function n(id){ return run.items[id]||0; }
@@ -5412,6 +5442,7 @@ function computeStats(){
     regen: 1.2*n('regen')+1*n('reactor'),
     cdMult: Math.max(0.45,Math.pow(0.88,n('capacitor'))),
     lifesteal: 0.03*n('coil'),
+    abStock: evo('capacitor')?2:1,   // Overcharge Cell: a second ability charge
     pellets:b.pellets, spread:b.spread, headMult:b.headMult, recoil:b.recoil
   };
   run.stats=s; return s;
@@ -5565,7 +5596,9 @@ function rebuildAvatar(){
   if(muz){ const ws=new THREE.Vector3(); muz.getWorldScale(ws); const inv=1/Math.max(1e-4,ws.x); if(flashMesh.isSprite)flashMesh.scale.set(fx.size*inv,fx.size*inv,1); else flashMesh.scale.setScalar(inv); }   // the mount carries the gun scale: cancel it so the flash is sized in metres
   if(avatarAnim)avatarAnim.play('idle',0);
   shieldMesh.visible=false; avatar.add(shieldMesh);
+  auraRing.visible=false; avatar.add(auraRing);
 }
+const auraRing=new THREE.Mesh(new THREE.RingGeometry(2.7,3,48),new THREE.MeshBasicMaterial({color:0x7ef0a8,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false})); auraRing.rotation.x=-Math.PI/2; auraRing.position.y=0.04;   // Nanite Bloom aura
 const shieldMesh=new THREE.Mesh(new THREE.SphereGeometry(1.25,20,14),new THREE.MeshBasicMaterial({color:0x6fe3ff,transparent:true,opacity:.22,wireframe:true}));
 shieldMesh.position.y=1.05;
 rebuildAvatar();
@@ -5643,7 +5676,7 @@ function finishEnemy(g,type,wave,animator,bones,model,modelScale){
     cd:type==='shooter'?1.2+Math.random():0.6, cd2:3.5, charge:0, dead:false, hurt:0, strafe:Math.random()<.5?1:-1,
     strafeT:1+Math.random()*2, bob:Math.random()*6, ref:{legs:[],arms:[]}, spawnT:0, wander:new THREE.Vector3(), wanderT:0,
     speedMul:1, path:null, pathI:0, navT:Math.random()*0.4, navGoal:-1,
-    animator:animator, bones:bones, model:model||null, modelScale:modelScale||1, token:false, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
+    animator:animator, bones:bones, model:model||null, modelScale:modelScale||1, token:false, stun:0, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
   };
   g.children.forEach(c=>{ if(c.userData.leg)e.ref.legs.push(c); if(c.userData.arm)e.ref.arms.push(c); });
   bodyHit.userData.enemy=e; bodyHit.userData.head=false;
@@ -5912,7 +5945,7 @@ function dropPickup(pos,kind){
 const state={mode:'menu',running:false,over:false,wave:0,score:0,kills:0,spawnQueue:0,waveBreak:0,t:0,acc:{shots:0,hits:0},
              boss:null,best:save.get('best',0)|0,startDelay:0,shake:0,
              stage:1,mapId:'foundry',mods:{},mod:null,portalOpen:false,portal:null,seed:0,bestStage:save.get('bestStage',0)|0,
-             scrap:0,offer:null,fab:null,waveT:0,forced:false,hitStop:0,impactFrames:0};
+             scrap:0,offer:null,fab:null,waveT:0,forced:false,hitStop:0,impactFrames:0,cores:0,evoFired:{},ascFired:{}};
 const rangeStats={hits:0,targets:0,dmgLog:[]};
 const keys={};
 let pointerLocked=false, spawnTimer=0, nearInteract=null;
@@ -6124,7 +6157,8 @@ function popHit(kill,crit){
 }
 function syncItems(){
   let h='';
-  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0)h+='<div class="it t-'+it.tier+'" title="'+it.name+' ('+it.tier+'): '+it.desc+'" style="color:'+it.color+';border-color:'+TIER_CSS[it.tier]+'">'+it.code+'<small>'+c+'</small></div>'; });
+  ITEMS.forEach(it=>{ const c=n(it.id); if(c>0){ const ev=run.evos[it.id]?EVOS[it.id]:null;
+    h+='<div class="it t-'+(ev?'legendary evo':it.tier)+'" title="'+(ev?ev.name+': '+ev.desc:it.name+' ('+it.tier+'): '+it.desc)+'" style="color:'+it.color+';border-color:'+(ev?TIER_CSS.legendary:TIER_CSS[it.tier])+'">'+it.code+(ev?'<u>&#9733;</u>':'')+'<small>'+c+'</small></div>'; } });
   itemsEl.innerHTML=h;
 }
 function syncHUD(){
@@ -6147,7 +6181,8 @@ function syncHUD(){
   abName.textContent=ab.name;
   if(player.abActive>0){ abKey.className='key active'; abFill.style.height='100%'; abState.textContent='Active '+player.abActive.toFixed(1)+'s'; }
   else if(player.abCd>0){ abKey.className='key'; abFill.style.height=((1-player.abCd/(ab.cd*s.cdMult))*100)+'%'; abState.textContent=player.abCd.toFixed(1)+'s'; }
-  else { abKey.className='key ready'; abFill.style.height='100%'; abState.textContent='Ready'; }
+  else { abKey.className='key ready'; abFill.style.height='100%'; abState.textContent=player.abStock>1?'Ready x'+player.abStock:'Ready'; }
+  if(player.abCd>0&&player.abStock>0&&player.abActive<=0){ abKey.className='key ready'; abState.textContent='x'+player.abStock+' \u00b7 '+player.abCd.toFixed(1)+'s'; }
   syncTouchHUD(); syncCompass();
   /* boss */
   if(state.boss&&!state.boss.dead){ bossbar.classList.add('on'); const pc=Math.max(0,state.boss.hp/state.boss.maxHp*100); bossFill.style.width=pc+'%'; bossHpEl.textContent=Math.ceil(pc)+'%'; }
@@ -6212,7 +6247,7 @@ function queueOffer(count,minTier,title){
   state.offer={stage:'pick',left:count,minTier:minTier||'common',items:rollOffer(minTier),sel:0,title:title||'Supply'};
   state.running=false; renderOffer();
 }
-function renderOffer(){ const o=state.offer; if(!o)return; if(o.stage==='fab')showFab(); else if(o.stage==='scrapPick')showScrapPick(); else showOffer(); }
+function renderOffer(){ const o=state.offer; if(!o)return; if(o.stage==='fab')showFab(); else if(o.stage==='scrapPick')showScrapPick(); else if(o.stage==='forge')showForge(); else if(o.stage==='asc')showAsc(); else showOffer(); }
 function tierLabel(t){ return t.charAt(0).toUpperCase()+t.slice(1); }
 function optHTML(it,i,sel,extra){ const c=n(it.id);
   return '<button class="opt t-'+it.tier+(sel?' sel':'')+'" data-i="'+i+'"><span class="tier">'+tierLabel(it.tier)+'</span><b class="code" style="color:'+it.color+'">'+it.code+'</b>'+
@@ -6228,8 +6263,8 @@ function pickOffer(i){ const o=state.offer; if(!o||o.stage!=='pick')return; cons
   closeOffer(); }
 function closeOffer(){ state.offer=null; if(TOUCH||pointerLocked||state.forced)resumePlay(); else enterPlay(); }
 function offerMove(d){ const o=state.offer; if(!o)return; const nOpt=o.stage==='fab'?FAB_OPTS.length:o.items.length; o.sel=(o.sel+d+nOpt)%nOpt; SFX.ui(); renderOffer(); }
-function offerConfirm(){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(o.sel); else if(o.stage==='scrapPick')scrapPick(o.sel); else fabBuy(o.sel); }
-function offerKey(i){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(i); else if(o.stage==='scrapPick')scrapPick(i); else fabBuy(i); }
+function offerConfirm(){ offerKey(state.offer?state.offer.sel:0); }
+function offerKey(i){ const o=state.offer; if(!o)return; if(o.stage==='pick')pickOffer(i); else if(o.stage==='scrapPick')scrapPick(i); else if(o.stage==='forge')fuse(i); else if(o.stage==='asc')pickAsc(i); else fabBuy(i); }
 
 /* ---- scrap: credited straight to the counter on every kill (no pickup to chase) ---- */
 const SCRAP_VALUE={chaser:3,shooter:5,elite:12,boss:60};
@@ -6239,7 +6274,8 @@ function addScrap(amount,pos){ if(amount<=0)return; state.scrap+=amount; if(pos)
 const FAB_OPTS=[
   {id:'offer', cost:60, name:'Item offer',        desc:'Three candidates, pick one'},
   {id:'rare',  cost:120,name:'Rare offer',        desc:'Three rare-or-better candidates'},
-  {id:'reroll',cost:200,name:'Reroll a held item',desc:'Scrap one stack of an item you hold, choose a replacement'}
+  {id:'reroll',cost:200,name:'Reroll a held item',desc:'Scrap one stack of an item you hold, choose a replacement'},
+  {id:'forge', cost:0,  name:'Forge',             desc:'Fuse an item you hold at 5 stacks into its evolution (spends a Forge Core)'}
 ];
 function spawnFabricator(spawn){
   state.fab=null; if(!nav.ready)return;
@@ -6263,12 +6299,14 @@ function spawnFabricator(spawn){
 function openFabricator(){ if(state.offer||state.mode!=='run')return; state.offer={stage:'fab',sel:0,items:[]}; state.running=false; showFab(); }
 function showFab(){ const o=state.offer;
   showScreen('<h1>Fabricator</h1><div class="tag">Scrap <b style="color:var(--warn)">'+state.scrap+'</b>'+(TOUCH?'':' &middot; 1 / 2 / 3 &middot; Esc to leave')+'</div>'+
-    '<div class="offer fab">'+FAB_OPTS.map((f,i)=>'<button class="opt'+(i===o.sel?' sel':'')+(state.scrap<f.cost?' off':'')+'" data-i="'+i+'"><span class="tier">'+f.cost+' scrap</span><h3>'+f.name+'</h3><p>'+f.desc+'</p><kbd>'+(i+1)+'</kbd></button>').join('')+'</div>'+
+    '<div class="offer fab">'+FAB_OPTS.map((f,i)=>{ const forge=f.id==='forge', can=forge?(state.cores>0&&forgeEligible().length>0):state.scrap>=f.cost;
+      return '<button class="opt'+(i===o.sel?' sel':'')+(can?'':' off')+(forge?' t-legendary':'')+'" data-i="'+i+'"><span class="tier">'+(forge?state.cores+' core'+(state.cores===1?'':'s'):f.cost+' scrap')+'</span><h3>'+f.name+'</h3><p>'+f.desc+'</p><kbd>'+(i+1)+'</kbd></button>'; }).join('')+'</div>'+
     '<button class="ghost" id="fabLeave">Leave</button>',true);
   card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>fabBuy(parseInt(el.dataset.i)); });
   $('fabLeave').onclick=closeOffer;
 }
 function fabBuy(i){ const o=state.offer; if(!o||o.stage!=='fab')return; const f=FAB_OPTS[i]; if(!f)return;
+  if(f.id==='forge'){ if(!openForge()){ SFX.empty(); say(state.cores>0?'Nothing at 5 stacks to fuse':'No Forge Core','warn'); } return; }
   if(state.scrap<f.cost){ SFX.empty(); return; }
   if(f.id==='reroll'){ const held=ITEMS.filter(it=>n(it.id)>0); if(!held.length){ SFX.empty(); say('Nothing to reroll'); return; }
     state.scrap-=f.cost; state.offer={stage:'scrapPick',sel:0,items:held.map(it=>it.id),left:0}; showScrapPick(); return; }
@@ -6285,6 +6323,32 @@ function removeItemStack(id){
   computeStats(); if(run.stats.maxHp<before)player.hp=Math.min(player.hp,run.stats.maxHp); if(player.mag>run.stats.mag)player.mag=run.stats.mag;
   say('Scrapped <b>'+ITEM_BY_ID[id].name+'</b>'); syncItems(); syncHUD();
 }
+/* ---- Forge Cores: a Warden drops one; spend it at FUSE_STACKS of a single item to fuse that item into its evolution ---- */
+function forgeEligible(){ return ITEMS.filter(it=>EVOS[it.id]&&n(it.id)>=FUSE_STACKS&&!run.evos[it.id]).map(it=>it.id); }
+function addCore(){ state.cores++; SFX.item(); say('<b>Forge Core</b> recovered &middot; fuse an item at '+FUSE_STACKS+' stacks','item'); syncHUD(); }
+function openForge(){ const el=forgeEligible(); if(state.cores<=0||!el.length||state.mode!=='run')return false;
+  state.offer={stage:'forge',sel:0,items:el}; state.running=false; showForge(); return true; }
+function showForge(){ const o=state.offer;
+  showScreen('<h1>Forge <span>Core</span></h1><div class="tag">'+state.cores+' core'+(state.cores===1?'':'s')+' &middot; fuse one item into its evolution'+(TOUCH?'':' &middot; 1 &ndash; 9, Esc to keep the core')+'</div>'+
+    '<div class="offer many">'+o.items.map((id,i)=>{ const it=ITEM_BY_ID[id], ev=EVOS[id];
+      return '<button class="opt t-legendary'+(i===o.sel?' sel':'')+'" data-i="'+i+'"><span class="tier">Fuse '+it.name+' &times;'+n(id)+'</span><b class="code" style="color:'+it.color+'">'+it.code+'</b><h3>'+ev.name+'</h3><p>'+ev.desc+'</p><kbd>'+(i+1)+'</kbd></button>'; }).join('')+'</div>'+
+    '<button class="ghost" id="forgeLater">Keep the core</button>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>fuse(parseInt(el.dataset.i)); }); $('forgeLater').onclick=closeOffer;
+}
+function fuse(i){ const o=state.offer; if(!o||o.stage!=='forge')return; const id=o.items[i]; if(!id||state.cores<=0)return;
+  state.cores--; run.evos[id]=true; computeStats(); if(id==='capacitor')player.abStock=Math.min(run.stats.abStock,player.abStock+1);
+  const ev=EVOS[id]; SFX.item(); say('<b>'+ev.name+'</b> forged from '+ITEM_BY_ID[id].name,'item'); showBanner(ev.name,ev.desc,true); syncItems(); syncHUD();
+  state.offer=null; closeOffer(); }
+/* ---- ascensions: offered once, on entering stage 3 ---- */
+function offerAscension(){ const opts=ASCENSIONS[CH().id]; if(!opts||run.asc||state.mode!=='run')return false;
+  state.offer={stage:'asc',sel:0,items:opts.map(a=>a.id)}; state.running=false; showAsc(); return true; }
+function showAsc(){ const o=state.offer, opts=ASCENSIONS[CH().id];
+  showScreen('<h1>Ascension</h1><div class="tag">'+CH().name+' &middot; one permanent mutation for this run'+(TOUCH?'':' &middot; press 1 / 2')+'</div>'+
+    '<div class="offer two">'+opts.map((a,i)=>'<button class="opt t-rare'+(i===o.sel?' sel':'')+'" data-i="'+i+'"><span class="tier">'+CH().ability.name+' mutation</span><h3>'+a.name+'</h3><p>'+a.desc+'</p><kbd>'+(i+1)+'</kbd></button>').join('')+'</div>',true);
+  card.querySelectorAll('.opt').forEach(el=>{ el.onclick=()=>pickAsc(parseInt(el.dataset.i)); });
+}
+function pickAsc(i){ const o=state.offer; if(!o||o.stage!=='asc')return; const a=ASCENSIONS[CH().id][i]; if(!a)return;
+  run.asc=a.id; SFX.ability(); say('<b>'+a.name+'</b> &middot; '+a.desc,'item'); showBanner(a.name,'Ascended',true); syncHUD(); state.offer=null; closeOffer(); }
 
 /* ---- 27-characters.js ---- */
 /* ============================ characters ============================ */
@@ -6292,7 +6356,7 @@ function selectChar(i,inLobby){
   if(i<0||i>=CHARS.length)return;
   run.charIdx=i; save.set('char',i);
   computeStats(); rebuildAvatar();
-  player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.abCd=0; player.abActive=0; player.shield=0;
+  player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.abCd=0; player.abActive=0; player.abStock=run.stats.abStock||1; player.shield=0;
   if(inLobby){ SFX.ui(); say('Operative: <b>'+CH().name+'</b>'); updatePodRings(true); }
   syncHUD();
 }
@@ -6382,6 +6446,7 @@ function nextStage(){
   after(0.5,()=>{
     const hpKeep=player.hp; const m=buildStage(state.stage+1); state.stage++; player.hp=Math.max(hpKeep,player.hp);
     state.startDelay=6; state.stageBanner=true;   // the long breath after a Warden
+    if(state.stage===3&&!run.asc)after(1.3,()=>offerAscension());   // stage 3: choose the ascension
     showBanner(m.name,'Stage '+state.stage+' · '+m.sub+(state.mod?' · '+state.mod.name+': '+state.mod.desc:''),true);
     fadeEl.classList.remove('on'); syncHUD();
   });
@@ -6390,9 +6455,11 @@ function nextStage(){
 
 /* ---- 29-shooting.js ---- */
 /* ============================ shooting ============================ */
-function dealDamage(e,dmg,point,head,crit){
+function dealDamage(e,dmg,point,head,crit,noChain){
   if(e.shieldT>0){ spark(point,0x6fe3ff,4); SFX.hit(); popHit(false,false); return; }
-  const healBase=Math.min(dmg,Math.max(0,e.hp));   // lifesteal never counts overkill
+  if(head&&asc('executioner')){ dmg*=1.5; if(e.type!=='boss'&&e.type!=='dummy'&&e.hp<e.maxHp*0.35&&e.hp>dmg){ dmg=e.hp+1; fired('executioner'); } }   // Executioner
+  const overkill=dmg>e.hp; const healBase=evo('coil')?dmg:Math.min(dmg,Math.max(0,e.hp));   // lifesteal never counts overkill — unless Hemolattice
+  if(evo('coil')&&overkill&&state.mode==='run')fired('hemolattice');
   e.hp-=dmg; e.hurt=.14;
   if(e.type==='boss'&&e.mk>=4&&!e.shieldUsed&&e.hp<e.maxHp*0.5){ e.shieldUsed=true; e.shieldT=3.5; say('<b>Warden</b> raises a shield','item'); }
   if(state.mode==='range'){ rangeStats.dmgLog.push({t:state.t,v:dmg}); rangeStats.hits++; }
@@ -6400,6 +6467,9 @@ function dealDamage(e,dmg,point,head,crit){
   spark(point,crit?0xffd166:head?0xffe08a:0xff6a4d,head||crit?11:6);
   dmgNumber(point,dmg,crit?'crit':head?'head':'hit');
   if(crit)SFX.crit(); else if(head)SFX.head(); else SFX.hit();
+  /* Fracture Optic: a crit ricochets to the nearest other enemy within 8 m for 60% */
+  if(crit&&evo('lens')&&!noChain){ let best=null,bd=8; for(const o of enemies){ if(o===e||o.dead||o.type==='dummy')continue; const d=o.group.position.distanceTo(e.group.position); if(d<bd){bd=d;best=o;} }
+    if(best){ const pt=best.group.position.clone().setY(1.1); tracer(point,pt,0.03,0xffd166); fired('fracture'); dealDamage(best,dmg*0.6,pt,false,true,true); } }
   if(e.hp<=0){ killEnemy(e,head); popHit(true); } else popHit(false,crit);
 }
 /* cast list: enemy hit boxes + range plates / barrels, rebuilt only when one of those lists changes (hitListVer).
@@ -6424,7 +6494,13 @@ function tryFire(){
   const s=run.stats;
   if(player.mag<=0){ SFX.empty(); player.fireCd=.25; startReload(); return; }
   const od=(CH().id==='vanguard'&&player.abActive>0);
-  player.mag--; player.fireCd=s.fireT/(od?1.6:1); state.acc.shots++;
+  if(player.freeAmmoT>0)fired('hotswap'); else player.mag--;                                   // Hot Swap: free ammo after a reload
+  const rail=evo('rounds')&&(++player.shotIdx%6===0); if(rail)fired('railcore');               // Railcore: every 6th shot pierces for 250%
+  const belt=evo('extmag')&&player.mag<=s.mag*0.25; if(belt)fired('beltfeed');                  // Belt Feed: last quarter of the magazine
+  const siege=asc('siege')&&player.siegeT>=0.5; if(siege)fired('siege');                        // Siege Mode: planted feet
+  if(player.kineticT>0)fired('kinetic');                                                         // Kinetic Drive: post-sprint window
+  const dmgMul=(od?1.2:1)*(rail?2.5:1)*(belt?1.5:1)*(siege?1.35:1)*(player.kineticT>0?1.4:1);
+  player.fireCd=s.fireT/(od?1.6:1)/(1+0.3*player.adrenal); state.acc.shots++;
   if(CH().id==='bulwark')SFX.shotHeavy(); else if(CH().id==='ranger')SFX.shotSnipe(); else SFX.shot();
   player.recoil=Math.min(player.recoil+s.recoil,0.16); player.aimT=2.5; player.kick=Math.min(1,player.kick*0.5+(CH().id==='bulwark'?1:CH().id==='ranger'?0.85:0.6));
   flash.intensity=3.2; flashMat.opacity=.9; if(flashMat.isSpriteMaterial)flashMat.rotation=Math.random()*6.28; else flashMesh.rotation.x=Math.random()*6.28;
@@ -6432,7 +6508,7 @@ function tryFire(){
   crossEl.classList.add('wide'); player.crossT=0.11;
 
   const muzzle=_mz; flashMesh.getWorldPosition(muzzle);
-  const baseSpread=(s.spread+(inp.sprint?0.01:0)+(player.vel.lengthSq()>2?0.004:0))*(1-0.4*player.aimK);   // aiming tightens the cone
+  const baseSpread=(s.spread+(inp.sprint?0.01:0)+(player.vel.lengthSq()>2?0.004:0))*(1-0.4*player.aimK)*(siege?0.5:1);   // aiming (and Siege Mode) tightens the cone
   let pelletHits=0;
   for(let p=0;p<s.pellets;p++){
     /* 1. aim: the camera ray through the screen centre (+ spread) finds what the crosshair is on, ignoring anything
@@ -6446,15 +6522,17 @@ function tryFire(){
     /* 2. hit: from the muzzle to that aim point, so cover between the gun and the target blocks the shot */
     dir.copy(_aim).sub(muzzle); const len=dir.length(); if(len<1e-3)continue; dir.multiplyScalar(1/len);
     const h=castShot(muzzle,dir,len+0.05,-2);
-    const endPoint=h.point;
+    const endPoint=h.point; state.lastShot={o:muzzle.toArray(),d:dir.toArray()};   // bullet line of the last pellet (harness + debugging)
     if(h.obj){
       const e=h.obj.userData.enemy, tg=h.obj.userData.target, bar=h.obj.userData.barrel;
       if(bar){ pelletHits++; explodeBarrel(bar); }
       else if(e&&!e.dead){
         pelletHits++;
         const head=h.obj.userData.head, crit=Math.random()<s.crit;
-        const dmg=s.dmg*(head?s.headMult:1)*(crit?2:1)*(od?1.2:1);
+        const dmg=s.dmg*(head?s.headMult:1)*(crit?2:1)*dmgMul;
         dealDamage(e,dmg,endPoint,head,crit);
+        if(rail){ ray.set(muzzle,dir); ray.far=60; const more=ray.intersectObjects(getHitList(),false); ray.far=Infinity; const seen=new Set([e]);   // pierce: every further enemy on the line
+          for(const hh of more){ const o=hh.object.userData.enemy; if(!o||o.dead||seen.has(o))continue; seen.add(o); dealDamage(o,dmg,hh.point,hh.object.userData.head,crit); } }
       }else if(tg&&tg.down<=0){
         pelletHits++; rangeStats.hits++; rangeStats.targets++;
         rangeStats.dmgLog.push({t:state.t,v:s.dmg*(Math.random()<s.crit?2:1)});
@@ -6473,12 +6551,14 @@ function killEnemy(e,head){
     spark(e.group.position.clone().setY(1.1),0x9fb4cc,12); SFX.kill();
     removeEnemy(e,true); after(2,()=>{ if(state.mode==='range')spawnDummy(); }); return;
   }
-  state.hitStop=Math.max(state.hitStop,e.type==='boss'?0.14:0.06); state.impactFrames++;   // hit-stop: the simulation slows for 60 ms (140 ms on a Warden); rendering never pauses
+  state.hitStop=Math.max(state.hitStop,e.type==='boss'?0.14:0.06); state.impactFrames++;
+  if(evo('syringe')){ player.adrenal=Math.min(3,player.adrenal+1); player.adrenalT=3; fired('adrenal'); }   // Adrenal Cascade
+  if(evo('coil')){ player.hemoT=2; }                                                                        // Hemolattice speed   // hit-stop: the simulation slows for 60 ms (140 ms on a Warden); rendering never pauses
   const pts=(e.type==='boss'?1500:e.type==='shooter'?170:110)*(head?2:1);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
-    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
+    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); addCore(); after(0.9,()=>{ if(!state.offer)openForge(); }); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
     state.boss=null; bossDefeated(e.group.position.clone());
   }else{
@@ -6500,12 +6580,20 @@ function startReload(){
 
 /* ---- 30-abilities.js ---- */
 /* ============================ abilities ============================ */
+/* one charge normally; the Overcharge Cell evolution gives two (run.stats.abStock). A charge refills when abCd runs out. */
 function useAbility(){
-  if(!state.running||state.mode==='lobby'||player.abCd>0||player.abActive>0)return;
-  const ab=CH().ability, s=run.stats;
-  player.abCd=ab.cd*s.cdMult;
-  if(CH().id==='vanguard'){ player.abActive=ab.dur; SFX.ability(); say('<b>Overdrive</b> engaged'); }
-  else if(CH().id==='bulwark'){ player.abActive=ab.dur; player.shield=run.stats.maxHp*0.45; shieldMesh.visible=true; SFX.ability(); say('<b>Barrier</b> up'); }
+  if(!state.running||state.mode==='lobby'||player.abActive>0||player.abStock<=0)return;
+  const ab=CH().ability, s=run.stats, maxStock=s.abStock||1;
+  player.abStock--;
+  if(player.abCd>0&&maxStock>1)fired('overcharge');                        // the second charge, used while the first still cools
+  if(player.abCd<=0)player.abCd=ab.cd*s.cdMult*(CH().id==='ranger'&&asc('ghost')?0.6:1);
+  if(CH().id==='vanguard'){ player.abActive=ab.dur; SFX.ability(); say('<b>Overdrive</b> engaged'+(asc('warcry')?' &middot; Warcry':'')); if(asc('warcry'))fired('warcry'); }
+  else if(CH().id==='bulwark'){
+    player.abActive=ab.dur; player.shield=run.stats.maxHp*(asc('bastion')?1.0:0.45); shieldMesh.visible=true; SFX.ability(); say('<b>Barrier</b> up');
+    if(asc('bastion'))fired('bastion');
+    if(asc('riot')){ let nHit=0; for(const e of enemies){ if(e.dead||e.type==='dummy')continue; const d=e.group.position.distanceTo(player.pos); if(d<4){ const dir=e.group.position.clone().sub(player.pos).setY(0).normalize(); e.group.position.addScaledVector(dir,3); resolveXZ(e.group.position,0.5*e.size,e.group.position.y,1.8); e.stun=1.5; e.hurt=.14; nHit++; } }
+      if(nHit){ fired('riot'); shakeCam(0.5,0); spark(player.pos.clone().setY(1),0x6fe3ff,18); say('<b>Riot Charge</b> stunned '+nHit,'item'); } }
+  }
   else if(CH().id==='ranger'){
     const fwd=forwardVec(player.yaw,0); fwd.y=0; fwd.normalize();
     const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();
@@ -6516,7 +6604,8 @@ function useAbility(){
     const p=player.pos.clone();
     for(let k=0;k<16;k++){ const q=p.clone().add(d.clone().multiplyScalar(0.5)); if(resolveXZ(q,PLAYER_R,player.pos.y,1.8))break; p.copy(q); }
     p.x=Math.max(-ARENA+1,Math.min(ARENA-1,p.x)); p.z=Math.max(-ARENA+1,Math.min(ARENA-1,p.z));
-    player.pos.copy(p); player.iframes=0.5; player.rollT=0.5; SFX.blink();
+    player.pos.copy(p); player.iframes=asc('ghost')?1.2:0.5; player.rollT=0.5; SFX.blink();
+    if(asc('ghost')){ fired('ghost'); player.reloading=0; reloadbar.classList.remove('on'); player.mag=run.stats.mag; }
     spark(player.pos.clone().setY(1),0x3ddc84,14);
   }
   syncHUD();
@@ -6528,6 +6617,7 @@ function useAbility(){
 function shakeCam(amp,dist){ const k=dist>0?Math.max(0,1-dist/22):1; state.shake=Math.min(1,Math.max(state.shake,amp*k)); }
 function hurtPlayer(amount){
   if(!state.running||state.mode!=='run'||player.iframes>0)return;
+  if(asc('warcry')&&player.abActive>0)amount*=0.7;   // Warcry
   if(player.shield>0){ const a=Math.min(player.shield,amount); player.shield-=a; amount-=a; spark(player.pos.clone().setY(1.2),0x6fe3ff,5); if(player.shield<=0){shieldMesh.visible=false;} }
   if(amount<=0){ syncHUD(); return; }
   player.hp-=amount; player.lastHurt=0; player.flinch=1; player.hitT=0.45; shakeCam(Math.min(0.5,0.2+amount/60),0);
@@ -6552,12 +6642,14 @@ function update(dt){
   if(player.fireCd>0)player.fireCd-=dt;
   if(player.iframes>0)player.iframes-=dt;
   player.recoil=Math.max(0,player.recoil-dt*0.32);
-  if(player.abCd>0){ player.abCd-=dt; if(player.abCd<0)player.abCd=0; }
+  if(player.abCd>0){ player.abCd-=dt; if(player.abCd<=0){ player.abCd=0; const mx=s.abStock||1; player.abStock=Math.min(mx,player.abStock+1); if(player.abStock<mx)player.abCd=CH().ability.cd*s.cdMult; } }
+  if(player.adrenalT>0){ player.adrenalT-=dt; if(player.adrenalT<=0)player.adrenal=0; }
+  if(player.kineticT>0)player.kineticT-=dt; if(player.hemoT>0)player.hemoT-=dt; if(player.freeAmmoT>0)player.freeAmmoT-=dt;
   if(player.abActive>0){ player.abActive-=dt; if(player.abActive<=0){ player.abActive=0; if(CH().id==='bulwark'){player.shield=0; shieldMesh.visible=false;} } }
   if(player.reloading>0){
     player.reloading-=dt;
     reloadfill.style.width=(1-player.reloading/s.reloadT)*100+'%';
-    if(player.reloading<=0){ player.mag=s.mag; reloadbar.classList.remove('on'); reloadfill.style.width='0%'; }
+    if(player.reloading<=0){ player.mag=s.mag; reloadbar.classList.remove('on'); reloadfill.style.width='0%'; if(evo('loader'))player.freeAmmoT=1.5; }   // Hot Swap window
   }
   pollGamepad(dt); readInput();
   /* free look: idle = the mouse orbits the camera round the character; any action turns the character to face the camera */
@@ -6574,7 +6666,12 @@ function update(dt){
   const right=_right.crossVectors(fwd,UP).normalize();
   const wish=_wish.set(0,0,0).addScaledVector(fwd,inp.f).addScaledVector(right,inp.r);
   const moving=inp.moving;
-  const spd=inp.sprint?(inp.f>0.5?s.sprint:s.sprint*0.8):s.speed;   // omnidirectional sprint: full speed forward, 80% sideways / back
+  let spd=inp.sprint?(inp.f>0.5?s.sprint:s.sprint*0.8):s.speed;   // omnidirectional sprint: full speed forward, 80% sideways / back
+  if(player.hemoT>0)spd*=1.08;                                                        // Hemolattice
+  if(asc('bastion')&&player.abActive>0&&player.shield>0)spd*=0.7;                     // Bastion
+  /* Kinetic Drive: a sprint of at least 0.4 s leaves a 2 s damage window when it ends; Siege Mode counts planted time */
+  if(inp.sprint&&moving)player.sprintT+=dt; else { if(player.sprintT>=0.4&&evo('servo'))player.kineticT=2; player.sprintT=0; }
+  player.siegeT=moving?0:player.siegeT+dt;
   const target=wish.multiplyScalar(spd);
   let accel=player.grounded?14:5;
   if(player.grounded&&mapData.ice.length){ for(const ic of mapData.ice){ if(Math.hypot(player.pos.x-ic.x,player.pos.z-ic.z)<ic.r){ accel=2.2; break; } } }
@@ -6593,10 +6690,14 @@ function update(dt){
 
   /* ---- regen ---- */
   player.lastHurt+=dt;
-  if(player.hp>0&&player.hp<s.maxHp){
-    let r=s.regen; if(player.lastHurt>REGEN_DELAY)r+=REGEN_RATE;
-    if(r>0){ player.hp=Math.min(s.maxHp,player.hp+r*dt); }
+  const nanite=evo('regen'); auraRing.visible=nanite;
+  if(player.hp>0){
+    let r=s.regen; if(player.lastHurt>REGEN_DELAY||nanite)r+=REGEN_RATE;                 // Nanite Bloom: the aura never stops in combat
+    if(r>0&&player.hp<s.maxHp)player.hp=Math.min(s.maxHp,player.hp+r*dt);
+    else if(r>0&&nanite&&mode==='run'){ const cap=s.maxHp*0.3; if(player.shield<cap){ player.shield=Math.min(cap,player.shield+r*dt*0.5); shieldMesh.visible=true; if(!player.naniteFired){ player.naniteFired=true; fired('nanite'); } } }
   }
+  if(evo('plating')&&mode==='run'&&player.lastHurt>8&&player.shield<s.maxHp*0.25&&!(CH().id==='bulwark'&&player.abActive>0)){ player.shield=s.maxHp*0.25; shieldMesh.visible=true; fired('weave'); }   // Ablative Weave refills after 8 s without damage
+  if(asc('warcry')&&player.abActive>0&&CH().id==='vanguard')player.hp=Math.min(s.maxHp,player.hp+0.15*s.maxHp/CH().ability.dur*dt);   // Warcry heal
 
   /* ---- avatar ---- */
   avatar.position.copy(player.pos);
@@ -6687,6 +6788,7 @@ function update(dt){
     if(e.type!=='dummy')g.rotation.y=Math.atan2(-toP.x,-toP.z);
 
     let mv=_v2.set(0,0,0);
+    if(e.stun>0)e.stun-=dt;   // Riot Charge stun: no movement, no attack this step
     /* pathed approach direction: straight line when close, otherwise A* over the nav grid */
     const dy=Math.abs(player.pos.y-g.position.y);
     const approach=(minD)=>{ if(distP<=minD&&dy<1.2)return false; if(distP<3&&dy<1.2){ mv.copy(toP); return true; }
@@ -6729,6 +6831,7 @@ function update(dt){
         mv.add(_v3.copy(g.position).sub(o.group.position).setY(0).normalize().multiplyScalar(e.speed*0.9));
       }
     }
+    if(e.stun>0)mv.set(0,0,0);
     g.position.x+=mv.x*dt; g.position.z+=mv.z*dt;
     resolveXZ(g.position,0.5*e.size,g.position.y,1.8);
     g.position.x=Math.max(-ARENA+1,Math.min(ARENA-1,g.position.x));
@@ -6763,7 +6866,7 @@ function update(dt){
     if(e.spawnT<=0&&!(e.shieldT>0))g.scale.setScalar(e.size);
 
     /* attacks (only in a real run) */
-    if(mode!=='run')continue;
+    if(mode!=='run'||e.stun>0)continue;
     e.cd-=dt;
     if(e.type==='chaser'){
       if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+Math.min(state.wave,22)*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
@@ -6923,7 +7026,7 @@ function toggleDebug(){ dbgOn=!dbgOn; dbgEl.classList.toggle('on',dbgOn); }
 function resetPlayerFor(mode,pos){
   player.pos.copy(pos); player.vel.set(0,0,0); player.yaw=0; player.pitch=-0.06; player.orbit=0; player.aimK=0;
   player.hp=run.stats.maxHp; player.mag=run.stats.mag; player.reloading=0; player.recoil=0; player.lastHurt=99;
-  player.alive=true; player.abCd=0; player.abActive=0; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
+  player.alive=true; player.abCd=0; player.abActive=0; player.abStock=run.stats.abStock||1; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');
 }
 function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); }
@@ -6950,7 +7053,8 @@ function goRun(seed){
   const qs=/[?&]seed=(\d+)/.exec(location.search);
   state.seed=seed||(qs?parseInt(qs[1]):(Date.now()%1e9));
   run.order=makeRunOrder(state.seed);
-  run.items={}; run.itemsTaken=0; computeStats(); syncItems();
+  run.items={}; run.itemsTaken=0; run.evos={}; run.asc=null; computeStats(); syncItems();
+  state.cores=0; state.evoFired={}; state.ascFired={}; player.adrenal=0; player.adrenalT=0; player.kineticT=0; player.hemoT=0; player.siegeT=0; player.freeAmmoT=0; player.shotIdx=0; player.naniteFired=false;
   state.score=0; state.kills=0; state.over=false; state.waveBreak=0; state.t=0; state.wave=0;
   state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1; state.scrap=0; state.offer=null; state.waveT=0;
   if(state.portal){ scene.remove(state.portal); state.portal=null; }
@@ -7161,6 +7265,10 @@ function showCodex(){
     ITEMS.filter(it=>it.tier===t).map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+it.name+'</b> — '+it.desc+'</div>').join('')+'</div>';
   showScreen('<h1>Item <span>Codex</span></h1><div class="tag">Every item is a pick of one from three &middot; crates, drops, Wardens, the Fabricator</div>'+
     group('legendary')+group('rare')+group('common')+
+    '<div class="tierhead" style="color:var(--gold)">Evolutions &middot; fuse an item at '+FUSE_STACKS+' stacks with a Forge Core (Wardens drop one)</div><div class="itemlist">'+
+    ITEMS.filter(it=>EVOS[it.id]).map(it=>'<div><b style="color:'+it.color+'">'+it.code+'</b> &nbsp;<b>'+EVOS[it.id].name+'</b> — '+EVOS[it.id].desc+'</div>').join('')+'</div>'+
+    '<div class="tierhead" style="color:var(--accent)">Ascensions &middot; one permanent mutation at stage 3, per run</div><div class="itemlist">'+
+    CHARS.map(c=>ASCENSIONS[c.id]?ASCENSIONS[c.id].map(a=>'<div><b style="color:'+c.css+'">'+c.name+'</b> &nbsp;<b>'+a.name+'</b> — '+a.desc+'</div>').join(''):'').join('')+'</div>'+
     '<button class="ghost" id="back">Back</button>');
   $('back').onclick=showMenu;
 }
@@ -7232,7 +7340,7 @@ window.__ARENA__={applyLook:applyLook,camYaw:camYaw,barrels:barrels,explodeBarre
   computeStats:computeStats,selectChar:selectChar,giveItem:giveItem,useAbility:useAbility,goLobby:goLobby,goRange:goRange,goRun:goRun,
   startWave:startWave,pickups:pickups,targets:targets,interactables:interactables,perf:perf,Q:Q,setQuality:setQuality,renderer:renderer,toggleDebug:toggleDebug,inp:inp,touch:touch,pad:pad,TOUCH:TOUCH,nav:nav,MAPS:MAPS,buildStage:buildStage,nextStage:nextStage,mapData:mapData,stageMap:stageMap,navPath:navPath,navNearestOpen:navNearestOpen,bossDefeated:bossDefeated,MODELS:MODELS,SETTINGS:SETTINGS,showSettings:showSettings,spawnCharacter:spawnCharacter,GUN_MOUNT:GUN_MOUNT,avatar:avatar,podDisplays:podDisplays,makeEnemy:makeEnemy,avatarAnim:function(){return avatarAnim;},corpses:corpses,
   dmgNums:dmgNums,decals:decals,dmgNumber:dmgNumber,WEAPON_FX:WEAPON_FX,CAM:CAM,RIGS:RIGS,LADDER:LADDER,CHAR_BOOST:CHAR_BOOST,calPoints:calPoints,setTheme:setTheme,applyRig:applyRig,addRim:addRim,MOUNTS:MOUNTS,timers:timers,after:after,rayWorld:rayWorld,castShot:castShot,hurtPlayer:hurtPlayer,killEnemy:killEnemy,dealDamage:dealDamage,
-  queueOffer:queueOffer,pickOffer:pickOffer,offerKey:offerKey,closeOffer:closeOffer,openFabricator:openFabricator,fabBuy:fabBuy,scrapPick:scrapPick,rollOffer:rollOffer,addScrap:addScrap,spawnFabricator:spawnFabricator,
+  removeEnemy:removeEnemy,showCodex:showCodex,EVOS:EVOS,ASCENSIONS:ASCENSIONS,openForge:openForge,fuse:fuse,offerAscension:offerAscension,pickAsc:pickAsc,addCore:addCore,forgeEligible:forgeEligible,queueOffer:queueOffer,pickOffer:pickOffer,offerKey:offerKey,closeOffer:closeOffer,openFabricator:openFabricator,fabBuy:fabBuy,scrapPick:scrapPick,rollOffer:rollOffer,addScrap:addScrap,spawnFabricator:spawnFabricator,
   forceStart:function(mode){ state.forced=true; audio(); (mode==='lobby'?goLobby:mode==='range'?goRange:goRun)(); state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); }};
 })();
 </script>

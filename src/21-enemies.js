@@ -70,7 +70,7 @@ function finishEnemy(g,type,wave,animator,bones,model,modelScale){
     cd:type==='shooter'?1.2+Math.random():0.6, cd2:3.5, charge:0, dead:false, hurt:0, strafe:Math.random()<.5?1:-1,
     strafeT:1+Math.random()*2, bob:Math.random()*6, ref:{legs:[],arms:[]}, spawnT:0, wander:new THREE.Vector3(), wanderT:0,
     speedMul:1, path:null, pathI:0, navT:Math.random()*0.4, navGoal:-1,
-    animator:animator, bones:bones, model:model||null, modelScale:modelScale||1, token:false, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
+    animator:animator, bones:bones, model:model||null, modelScale:modelScale||1, token:false, stun:0, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
   };
   g.children.forEach(c=>{ if(c.userData.leg)e.ref.legs.push(c); if(c.userData.arm)e.ref.arms.push(c); });
   bodyHit.userData.enemy=e; bodyHit.userData.head=false;

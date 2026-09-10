@@ -54,6 +54,8 @@
              display:flex;align-items:center;justify-content:center;font:700 var(--label)/1 ui-monospace,Menlo,monospace;letter-spacing:.02em}
   #items .it small{position:absolute;right:-5px;bottom:-5px;background:var(--txt);color:#0a0d14;border-radius:8px;padding:1px 5px;font:700 10px/1.3 "Inter",system-ui,sans-serif}
   #items .it.t-legendary{box-shadow:0 0 10px rgba(255,209,102,.35)}
+  #items .it u{position:absolute;left:-4px;top:-6px;text-decoration:none;color:var(--gold);font-size:10px}
+  .offer.two{grid-template-columns:repeat(2,1fr)}
 
   /* bottom-right: magazine as the hero number, the capacity small beside it */
   #ammo{right:calc(var(--g)*3);bottom:calc(var(--g)*3);padding:calc(var(--g)*2);min-width:168px}

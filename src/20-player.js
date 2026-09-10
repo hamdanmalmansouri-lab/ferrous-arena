@@ -2,9 +2,13 @@
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0,
+  adrenal:0, adrenalT:0, kineticT:0, sprintT:0, hemoT:0, siegeT:0, freeAmmoT:0, shotIdx:0, abStock:1, naniteFired:false
 };
-const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
+const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null, evos:{}, asc:null};
+function evo(itemId){ return !!run.evos[itemId]; }
+function asc(id){ return run.asc===id; }
+function fired(id){ const t=id in EVO_BY_ID?state.evoFired:state.ascFired; t[id]=(t[id]||0)+1; }   // harness evidence that an evolution / ascension did something
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
 function CH(){ return CHARS[run.charIdx]; }
 function n(id){ return run.items[id]||0; }
@@ -22,6 +26,7 @@ function computeStats(){
     regen: 1.2*n('regen')+1*n('reactor'),
     cdMult: Math.max(0.45,Math.pow(0.88,n('capacitor'))),
     lifesteal: 0.03*n('coil'),
+    abStock: evo('capacitor')?2:1,   // Overcharge Cell: a second ability charge
     pellets:b.pellets, spread:b.spread, headMult:b.headMult, recoil:b.recoil
   };
   run.stats=s; return s;
@@ -175,7 +180,9 @@ function rebuildAvatar(){
   if(muz){ const ws=new THREE.Vector3(); muz.getWorldScale(ws); const inv=1/Math.max(1e-4,ws.x); if(flashMesh.isSprite)flashMesh.scale.set(fx.size*inv,fx.size*inv,1); else flashMesh.scale.setScalar(inv); }   // the mount carries the gun scale: cancel it so the flash is sized in metres
   if(avatarAnim)avatarAnim.play('idle',0);
   shieldMesh.visible=false; avatar.add(shieldMesh);
+  auraRing.visible=false; avatar.add(auraRing);
 }
+const auraRing=new THREE.Mesh(new THREE.RingGeometry(2.7,3,48),new THREE.MeshBasicMaterial({color:0x7ef0a8,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false})); auraRing.rotation.x=-Math.PI/2; auraRing.position.y=0.04;   // Nanite Bloom aura
 const shieldMesh=new THREE.Mesh(new THREE.SphereGeometry(1.25,20,14),new THREE.MeshBasicMaterial({color:0x6fe3ff,transparent:true,opacity:.22,wireframe:true}));
 shieldMesh.position.y=1.05;
 rebuildAvatar();

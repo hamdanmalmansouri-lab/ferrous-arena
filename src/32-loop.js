@@ -11,12 +11,14 @@ function update(dt){
   if(player.fireCd>0)player.fireCd-=dt;
   if(player.iframes>0)player.iframes-=dt;
   player.recoil=Math.max(0,player.recoil-dt*0.32);
-  if(player.abCd>0){ player.abCd-=dt; if(player.abCd<0)player.abCd=0; }
+  if(player.abCd>0){ player.abCd-=dt; if(player.abCd<=0){ player.abCd=0; const mx=s.abStock||1; player.abStock=Math.min(mx,player.abStock+1); if(player.abStock<mx)player.abCd=CH().ability.cd*s.cdMult; } }
+  if(player.adrenalT>0){ player.adrenalT-=dt; if(player.adrenalT<=0)player.adrenal=0; }
+  if(player.kineticT>0)player.kineticT-=dt; if(player.hemoT>0)player.hemoT-=dt; if(player.freeAmmoT>0)player.freeAmmoT-=dt;
   if(player.abActive>0){ player.abActive-=dt; if(player.abActive<=0){ player.abActive=0; if(CH().id==='bulwark'){player.shield=0; shieldMesh.visible=false;} } }
   if(player.reloading>0){
     player.reloading-=dt;
     reloadfill.style.width=(1-player.reloading/s.reloadT)*100+'%';
-    if(player.reloading<=0){ player.mag=s.mag; reloadbar.classList.remove('on'); reloadfill.style.width='0%'; }
+    if(player.reloading<=0){ player.mag=s.mag; reloadbar.classList.remove('on'); reloadfill.style.width='0%'; if(evo('loader'))player.freeAmmoT=1.5; }   // Hot Swap window
   }
   pollGamepad(dt); readInput();
   /* free look: idle = the mouse orbits the camera round the character; any action turns the character to face the camera */
@@ -33,7 +35,12 @@ function update(dt){
   const right=_right.crossVectors(fwd,UP).normalize();
   const wish=_wish.set(0,0,0).addScaledVector(fwd,inp.f).addScaledVector(right,inp.r);
   const moving=inp.moving;
-  const spd=inp.sprint?(inp.f>0.5?s.sprint:s.sprint*0.8):s.speed;   // omnidirectional sprint: full speed forward, 80% sideways / back
+  let spd=inp.sprint?(inp.f>0.5?s.sprint:s.sprint*0.8):s.speed;   // omnidirectional sprint: full speed forward, 80% sideways / back
+  if(player.hemoT>0)spd*=1.08;                                                        // Hemolattice
+  if(asc('bastion')&&player.abActive>0&&player.shield>0)spd*=0.7;                     // Bastion
+  /* Kinetic Drive: a sprint of at least 0.4 s leaves a 2 s damage window when it ends; Siege Mode counts planted time */
+  if(inp.sprint&&moving)player.sprintT+=dt; else { if(player.sprintT>=0.4&&evo('servo'))player.kineticT=2; player.sprintT=0; }
+  player.siegeT=moving?0:player.siegeT+dt;
   const target=wish.multiplyScalar(spd);
   let accel=player.grounded?14:5;
   if(player.grounded&&mapData.ice.length){ for(const ic of mapData.ice){ if(Math.hypot(player.pos.x-ic.x,player.pos.z-ic.z)<ic.r){ accel=2.2; break; } } }
@@ -52,10 +59,14 @@ function update(dt){
 
   /* ---- regen ---- */
   player.lastHurt+=dt;
-  if(player.hp>0&&player.hp<s.maxHp){
-    let r=s.regen; if(player.lastHurt>REGEN_DELAY)r+=REGEN_RATE;
-    if(r>0){ player.hp=Math.min(s.maxHp,player.hp+r*dt); }
+  const nanite=evo('regen'); auraRing.visible=nanite;
+  if(player.hp>0){
+    let r=s.regen; if(player.lastHurt>REGEN_DELAY||nanite)r+=REGEN_RATE;                 // Nanite Bloom: the aura never stops in combat
+    if(r>0&&player.hp<s.maxHp)player.hp=Math.min(s.maxHp,player.hp+r*dt);
+    else if(r>0&&nanite&&mode==='run'){ const cap=s.maxHp*0.3; if(player.shield<cap){ player.shield=Math.min(cap,player.shield+r*dt*0.5); shieldMesh.visible=true; if(!player.naniteFired){ player.naniteFired=true; fired('nanite'); } } }
   }
+  if(evo('plating')&&mode==='run'&&player.lastHurt>8&&player.shield<s.maxHp*0.25&&!(CH().id==='bulwark'&&player.abActive>0)){ player.shield=s.maxHp*0.25; shieldMesh.visible=true; fired('weave'); }   // Ablative Weave refills after 8 s without damage
+  if(asc('warcry')&&player.abActive>0&&CH().id==='vanguard')player.hp=Math.min(s.maxHp,player.hp+0.15*s.maxHp/CH().ability.dur*dt);   // Warcry heal
 
   /* ---- avatar ---- */
   avatar.position.copy(player.pos);
@@ -146,6 +157,7 @@ function update(dt){
     if(e.type!=='dummy')g.rotation.y=Math.atan2(-toP.x,-toP.z);
 
     let mv=_v2.set(0,0,0);
+    if(e.stun>0)e.stun-=dt;   // Riot Charge stun: no movement, no attack this step
     /* pathed approach direction: straight line when close, otherwise A* over the nav grid */
     const dy=Math.abs(player.pos.y-g.position.y);
     const approach=(minD)=>{ if(distP<=minD&&dy<1.2)return false; if(distP<3&&dy<1.2){ mv.copy(toP); return true; }
@@ -188,6 +200,7 @@ function update(dt){
         mv.add(_v3.copy(g.position).sub(o.group.position).setY(0).normalize().multiplyScalar(e.speed*0.9));
       }
     }
+    if(e.stun>0)mv.set(0,0,0);
     g.position.x+=mv.x*dt; g.position.z+=mv.z*dt;
     resolveXZ(g.position,0.5*e.size,g.position.y,1.8);
     g.position.x=Math.max(-ARENA+1,Math.min(ARENA-1,g.position.x));
@@ -222,7 +235,7 @@ function update(dt){
     if(e.spawnT<=0&&!(e.shieldT>0))g.scale.setScalar(e.size);
 
     /* attacks (only in a real run) */
-    if(mode!=='run')continue;
+    if(mode!=='run'||e.stun>0)continue;
     e.cd-=dt;
     if(e.type==='chaser'){
       if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+Math.min(state.wave,22)*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }

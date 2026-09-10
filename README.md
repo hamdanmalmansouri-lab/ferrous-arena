@@ -1,6 +1,6 @@
 # Ferrous Arena
 
-**Current build: v3.0.0-p4** (10 Sep 2026) — v3.0 "Meltdown" pass, phase 4 of 7 (game feel).
+**Current build: v3.0.0-p5** (10 Sep 2026) — v3.0 "Meltdown" pass, phase 5 of 7 (evolutions).
 
 Third-person roguelite wave shooter in a single HTML file (Three.js r128, vendored). Three operatives, twelve stacking items in three rarity tiers offered three at a time (you pick one), a scrap economy with a Fabricator per stage,
 a Warden boss every five waves, four stages that change after each boss (with modifiers), a lobby with a practice range.
@@ -45,6 +45,7 @@ npm install three@0.128.0 playwright --no-audit --no-fund   # once
 node build.js
 node test.js && node test2.js && node test3.js && node test4.js   # headless checks (desktop flow, aimed fire, touch, stages)
 node test7.js && node test8.js                                    # v3 gates: fire trace / melee tokens / timers / offline PWA; offers / tiers / scrap / damage curve
+node test10.js                                                    # v3 gate: Forge Core fusion, every evolution + ascension fires
 node test9.js                                                     # v3 gate: 10 s wave-5 capture (impact frame on every kill) -> Claude outputs/wave5-capture.png
 node look.js                                                      # screenshot pass: operatives, enemies, lobby, every map + sky band, value-ladder readout
 ```
