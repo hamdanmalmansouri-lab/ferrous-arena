@@ -1,8 +1,8 @@
 # Ferrous Arena
 
-**Current build: v3.0.0-p5** (10 Sep 2026) — v3.0 "Meltdown" pass, phase 5 of 7 (evolutions).
+**Current build: v3.0.0-p6** (10 Sep 2026) — v3.0 "Meltdown" pass, phase 6 of 7 (Meltdown Protocol).
 
-Third-person roguelite wave shooter in a single HTML file (Three.js r128, vendored). Three operatives, twelve stacking items in three rarity tiers offered three at a time (you pick one), a scrap economy with a Fabricator per stage,
+Third-person roguelite wave shooter in a single HTML file (Three.js r128, vendored). Two modes (Endless waves, and **Meltdown Protocol**: an 11-minute reactor charge with a Director instead of waves, Core Shards to bank or hold, and an extraction pad — the first win state) plus six timed Trials. Three operatives, twelve stacking items in three rarity tiers offered three at a time (you pick one), a scrap economy with a Fabricator per stage,
 a Warden boss every five waves, four stages that change after each boss (with modifiers), a lobby with a practice range.
 Plays with keyboard + mouse, touch, or a gamepad. Runs are seeded — add `?seed=123` to replay one.
 
@@ -45,6 +45,7 @@ npm install three@0.128.0 playwright --no-audit --no-fund   # once
 node build.js
 node test.js && node test2.js && node test3.js && node test4.js   # headless checks (desktop flow, aimed fire, touch, stages)
 node test7.js && node test8.js                                    # v3 gates: fire trace / melee tokens / timers / offline PWA; offers / tiers / scrap / damage curve
+node test11.js                                                    # v3 gate: Meltdown run to the extraction screen, shards, score code, a trial
 node test10.js                                                    # v3 gate: Forge Core fusion, every evolution + ascension fires
 node test9.js                                                     # v3 gate: 10 s wave-5 capture (impact frame on every kill) -> Claude outputs/wave5-capture.png
 node look.js                                                      # screenshot pass: operatives, enemies, lobby, every map + sky band, value-ladder readout

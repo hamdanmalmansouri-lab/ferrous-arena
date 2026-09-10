@@ -141,6 +141,26 @@
   #lowvig{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s;
        background:radial-gradient(ellipse at center,transparent 30%,rgba(150,10,10,.5) 100%)}
 
+  /* Meltdown: charge bar + shards replace the wave readout; trials: goal + clock */
+  #meltbar{left:50%;top:calc(var(--g)*3);transform:translateX(-50%);width:min(440px,60vw);padding:var(--g) calc(var(--g)*2) calc(var(--g)*1.25);display:none}
+  #meltbar .n{display:flex;justify-content:space-between;font-size:var(--label);letter-spacing:.14em;text-transform:uppercase;color:#ff6ad5;margin-bottom:6px}
+  #meltbar .bar{height:8px;border-radius:4px;background:rgba(255,255,255,.09);overflow:hidden}
+  #meltbar .fill{height:100%;width:0;background:linear-gradient(90deg,#9b4dff,#ff6ad5);transition:width .2s}
+  #meltbar .shards{margin-top:6px;font-size:var(--label);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);text-align:center}
+  #meltbar .shards b{color:#6fe3ff} #meltbar .shards em{font-style:normal;color:var(--good)}
+  #trialbar{left:50%;top:calc(var(--g)*3);transform:translateX(-50%);padding:var(--g) calc(var(--g)*3);text-align:center;display:none}
+  #trialbar .v{font:600 var(--hero)/1.1 "Inter",system-ui,sans-serif;font-variant-numeric:tabular-nums;margin-top:4px} #trialbar .v small{font-size:var(--body);color:var(--dim);margin-left:12px;font-weight:500}
+  #hud[data-kind="meltdown"] #topbar,#hud[data-kind="trial"] #topbar{display:none}
+  #hud[data-kind="meltdown"] #meltbar{display:block} #hud[data-kind="trial"] #trialbar{display:block}
+  #hud[data-mode="lobby"] #meltbar,#hud[data-mode="lobby"] #trialbar,#hud[data-mode="range"] #meltbar,#hud[data-mode="range"] #trialbar{display:none}
+  #compass i.term{color:#6fe3ff} #compass i.extract{color:var(--good)}
+  .code{margin-top:16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .code b{font:600 15px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;user-select:all}
+  .code button{margin:0;width:auto;padding:10px 14px;font-size:12px}
+  .trials{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  .trials button{margin:0;text-align:left;padding:14px;background:rgba(255,255,255,.05);color:var(--txt);border:1px solid var(--line);display:flex;flex-direction:column;gap:4px;align-items:flex-start;font:inherit;letter-spacing:0}
+  .trials button.done{border-color:rgba(61,220,132,.6)} .trials button small{font-size:11px;color:var(--dim);font-weight:400} .trials button i{font-style:normal;color:var(--good);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  @media (max-width:640px){ .trials{grid-template-columns:1fr} }
   /* hide per-mode */
   #hud[data-mode="lobby"] #vitals,#hud[data-mode="lobby"] #ammo,#hud[data-mode="lobby"] #topbar,#hud[data-mode="lobby"] #items,#hud[data-mode="lobby"] #ability{display:none}
   #hud[data-mode="range"] #topbar,#hud[data-mode="range"] #items,#hud[data-mode="range"] #hpnum .stat{display:none}
@@ -311,6 +331,15 @@
     <div class="panel" id="topbar">
       <div><div class="k">Wave</div><div class="v acc" id="uiWave"></div></div>
       <div><div class="k">Warden in</div><div class="v" id="uiBossIn"></div></div>
+    </div>
+    <div class="panel" id="meltbar">
+      <div class="n"><span>Reactor charge</span><span id="uiCharge">0%</span></div>
+      <div class="bar"><div class="fill" id="chargeFill"></div></div>
+      <div class="shards"><span>Shards</span> <b id="uiHeld">0</b> held &middot; <b id="uiBanked">0</b> banked <em id="uiExtract"></em></div>
+    </div>
+    <div class="panel" id="trialbar">
+      <div class="k" id="uiTrialName"></div>
+      <div class="v"><span id="uiTrialGoal"></span><small id="uiTrialTime"></small></div>
     </div>
     <div id="compass"></div>
 
@@ -4741,6 +4770,44 @@ const ASCENSIONS={
             {id:'riot',       name:'Riot Charge', desc:'Raising Barrier knocks enemies within 4 m back and stuns them for 1.5 s'}]
 };
 
+/* ---- 13b-data-modes.js ---- */
+/* ============================ data: game modes ============================ */
+/* Meltdown Protocol: no waves. A Director spends credits on cards while a reactor charges over 11 minutes; Wardens at 25 / 55 / 85 %;
+   each drops a Core Shard (bank it at a terminal or hold it for risk + reward); at 100 % an extraction pad opens for 90 s. */
+const MELTDOWN={
+  duration:660, extractWindow:90, aliveCap:16, dumpCadence:0.15, cadence:0.4,
+  cards:{chaser:12,shooter:20,elite:55,boss:240},
+  wardenAt:[0.25,0.55,0.85],
+  shardHoldCap:5, shardDrop:0.20, shardEnemyDmg:0.12,
+  creditRate:m=>8+1.6*m   // credits per second at m elapsed minutes
+};
+/* Trials: six fixed 60-90 s challenges on the existing maps with a restricted loadout (fixed operative where given, no items, no drops).
+   Completing one earns a Trial Mark (persisted in fa2.trials) - the unlock currency for the later roster. */
+const TRIALS=[
+  {id:'sprint',    name:'Foundry Sprint',    map:'foundry',char:'vanguard',time:60,goal:{kind:'kills',n:20},      rate:26,types:{chaser:1},          desc:'Vanguard, rifle only: drop 20 Rushers in 60 s'},
+  {id:'marksman',  name:'Relay Marksman',    map:'relay',  char:'ranger',  time:75,goal:{kind:'headshots',n:10},  rate:18,types:{chaser:.5,shooter:.5},desc:'Ranger: 10 headshot kills in 75 s'},
+  {id:'holdout',   name:'Frost Holdout',     map:'frost',  char:'bulwark', time:90,goal:{kind:'survive'},         rate:22,types:{chaser:.7,shooter:.3},desc:'Bulwark: survive 90 s of constant pressure'},
+  {id:'pulse',     name:'Reactor Dodge',     map:'reactor',char:null,      time:60,goal:{kind:'pulses',n:3},      rate:6, types:{chaser:1},pulsePeriod:15,desc:'Jump three shockwaves without being caught, in 60 s'},
+  {id:'demolition',name:'Foundry Demolition',map:'foundry',char:null,      time:60,goal:{kind:'barrelKills',n:12},rate:28,types:{chaser:1},          desc:'Kill 12 enemies with barrel explosions in 60 s'},
+  {id:'highground',name:'Relay High Ground', map:'relay',  char:null,      time:75,goal:{kind:'highKills',n:15},  rate:22,types:{chaser:.8,shooter:.2},desc:'Kill 15 enemies while standing on a platform top, in 75 s'}
+];
+const TRIAL_BY_ID={}; TRIALS.forEach(t=>TRIAL_BY_ID[t.id]=t);
+/* score code: one shared encoder for Meltdown scores and (later) Daily runs. base32 without I/L/O/U, 2-digit checksum, groups of 5. */
+const SC_ALPHA='0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+function scEnc(v,digits){ let t=''; v=Math.max(0,Math.floor(v)); for(let i=0;i<digits;i++){ t=SC_ALPHA[v%32]+t; v=Math.floor(v/32); } return t; }
+function scChk(body){ let c=0; for(let i=0;i<body.length;i++)c=(c*31+body.charCodeAt(i))%1024; return c; }
+function encodeScoreCode(o){   // {mode:0-15, char:0-15, seed:<2^30, score:<2^30, detail:<2^20}
+  const body=scEnc(((o.mode&15)<<4)|(o.char&15),2)+scEnc(o.seed>>>0,6)+scEnc(Math.min(1073741823,o.score),6)+scEnc(Math.min(1048575,o.detail||0),4);
+  return (body+scEnc(scChk(body),2)).replace(/(.{5})(?=.)/g,'$1-');
+}
+function decodeScoreCode(code){
+  const s=String(code||'').toUpperCase().replace(/[^0-9A-Z]/g,'').replace(/I/g,'1').replace(/L/g,'1').replace(/O/g,'0').replace(/U/g,'V');
+  if(s.length!==20)return null; const body=s.slice(0,18); const dec=(str)=>{ let v=0; for(const ch of str){ const k=SC_ALPHA.indexOf(ch); if(k<0)return -1; v=v*32+k; } return v; };
+  if(dec(s.slice(18))!==scChk(body))return null; const mc=dec(body.slice(0,2)); if(mc<0)return null;
+  return {mode:mc>>4,char:mc&15,seed:dec(body.slice(2,8)),score:dec(body.slice(8,14)),detail:dec(body.slice(14,18))};
+}
+const MODE_IDS={endless:0,meltdown:1,trial:2,daily:3};
+
 /* ---- 14-dom.js ---- */
 /* ============================ dom ============================ */
 const $=id=>document.getElementById(id);
@@ -4755,6 +4822,7 @@ const rangeEl=$('range'),rgDps=$('rgDps'),rgHits=$('rgHits'),rgTargets=$('rgTarg
 const lobbytag=$('lobbytag'),lbChar=$('lbChar'),promptEl=$('prompt'),promptTxt=$('promptTxt');
 const touchEl=$('touch'),zoneL=$('zoneL'),zoneR=$('zoneR'),stickEl=$('stick'),tFire=$('tFire'),tAbil=$('tAbil'),tAbilTxt=$('tAbilTxt'),tJump=$('tJump'),tReload=$('tReload'),tInteract=$('tInteract'),tInteractTxt=$('tInteractTxt'),tPause=$('tPause');
 const fadeEl=$('fade'),compassEl=$('compass');
+const meltbar=$('meltbar'),uiCharge=$('uiCharge'),chargeFill=$('chargeFill'),uiHeld=$('uiHeld'),uiBanked=$('uiBanked'),uiExtract=$('uiExtract'),trialbar=$('trialbar'),uiTrialName=$('uiTrialName'),uiTrialGoal=$('uiTrialGoal'),uiTrialTime=$('uiTrialTime');
 
 /* ---- 15-persistence.js ---- */
 /* ============================ persistence ============================ */
@@ -5000,7 +5068,7 @@ function explodeBarrel(b){
   if(state.mode==='run'&&dp<3.4)hurtPlayer(Math.round(16+state.wave*0.5));
   const dmg=70+state.wave*4; let n=0;
   for(const e of enemies.slice()){ if(e.dead)continue; const d=Math.hypot(e.group.position.x-b.x,e.group.position.z-b.z); const R=4.8*e.size;
-    if(d<R){ dealDamage(e,dmg*(1-0.6*d/R),e.group.position.clone().setY(1),false,false); n++; } }
+    if(d<R){ state.barrelKill=true; dealDamage(e,dmg*(1-0.6*d/R),e.group.position.clone().setY(1),false,false); state.barrelKill=false; n++; } }
   if(n)say('Barrel took out <b>'+n+'</b>','item');
   for(const o of barrels)if(!o.dead&&Math.hypot(o.x-b.x,o.z-b.z)<3.6)explodeBarrel(o);   // chain reaction
 }
@@ -5128,6 +5196,7 @@ function buildLobby(){
   /* portals */
   addPortal(-11,3,0x3ddc84,'Shooting Range',()=>goRange());
   addPortal( 11,3,0x4ea8ff,'Deploy',()=>goRun());
+  addPortal(0,12.5,0xff6ad5,'Meltdown Protocol',()=>goRun(null,'meltdown'));
   /* set dressing: lockers and shelves along the side walls, a desk by the range portal, crates by the deploy portal */
   if(MODELS.ok){ for(let i=0;i<4;i++){ addProp('locker',-15,-8+i*1.1,90,2.3,true); addProp('locker',15,-8+i*1.1,-90,2.3,true); }
     addProp('shelves',-14.9,4,90,2.3,true); addProp('desk',-11,-4,0,.9,true); addProp('crate_large',12,-6,90,1.4,true); addProp('crate_tarp',13,10,20,1.5,true); addProp('crate_tarp',-8,12.5,160,1.4,true); addProp('barrel2',9,12.5,0,.8,true); addProp('barrel2',10,13.4,40,.8,true); }
@@ -5421,7 +5490,7 @@ const player={
   lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0,
   adrenal:0, adrenalT:0, kineticT:0, sprintT:0, hemoT:0, siegeT:0, freeAmmoT:0, shotIdx:0, abStock:1, naniteFired:false
 };
-const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null, evos:{}, asc:null};
+const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null, evos:{}, asc:null, kind:'endless', trial:null};
 function evo(itemId){ return !!run.evos[itemId]; }
 function asc(id){ return run.asc===id; }
 function fired(id){ const t=id in EVO_BY_ID?state.evoFired:state.ascFired; t[id]=(t[id]||0)+1; }   // harness evidence that an evolution / ascension did something
@@ -5612,7 +5681,7 @@ const MAT_SHOOT =new THREE.MeshStandardMaterial({color:0x8e44ad,roughness:.55,me
 const MAT_BOSS  =new THREE.MeshStandardMaterial({color:0xd98a2b,roughness:.45,metalness:.6});
 const MAT_DUMMY =new THREE.MeshStandardMaterial({color:0x5c6b7a,roughness:.7,metalness:.3});
 const MAT_METAL =new THREE.MeshStandardMaterial({color:0x1c222b,roughness:.65,metalness:.6});
-const ENEMY_NAME={chaser:'Rusher',shooter:'Lancer',boss:'Warden',dummy:'Dummy'};
+const ENEMY_NAME={chaser:'Rusher',shooter:'Lancer',boss:'Warden',dummy:'Dummy',elite:'Elite'};
 
 const MAT_HIDDEN=new THREE.MeshBasicMaterial({visible:false,side:THREE.DoubleSide});   // double-sided so a shot cast from inside a hit box still registers
 const BASIC_CACHE={};
@@ -5633,15 +5702,17 @@ const ENEMY_TINT={chaser:0xd8352a,shooter:0xc06cff,boss:0xffb52e,dummy:0x6b7b8c}
 const HOVER_Y={shooter:1.25};                       // the Lancer drone floats
 const FLINCH_BONES=['Chest','Torso','Root','Body'];
 const corpses=[];
-function makeEnemy(type,wave){
-  const g=new THREE.Group();
+function makeEnemy(type,wave,opts){
+  const g=new THREE.Group(); const elite=!!(opts&&opts.elite);
   let animator=null, bones=null, model=null, modelScale=1;
   if(MODELS.ok&&MODELS.items[ENEMY_MODEL[type]]){
-    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); addRim(c.group,ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
+    const c=spawnCharacter(ENEMY_MODEL[type],elite?0xffd166:ENEMY_TINT[type]); addRim(c.group,elite?0xffe08a:ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
     if(HOVER_Y[type])c.group.position.y=HOVER_Y[type];
     bones.flinch=null; for(const b of FLINCH_BONES)if(bones[b]){ bones.flinch=bones[b]; break; }
   } else buildEnemyProcedural(g,type);
-  return finishEnemy(g,type,wave,animator,bones,model,modelScale);
+  const e=finishEnemy(g,type,wave,animator,bones,model,modelScale);
+  if(elite){ e.elite=true; e.hp*=3; e.maxHp=e.hp; e.speed*=1.3; e.size=1.25; g.scale.setScalar(1.25); if(e.model)e.model.traverse(o=>{ if(o.isMesh&&o.material.emissive&&!o.userData.rim)o.material.emissiveIntensity=1.2; }); }   // Elite: 3x HP, faster, bigger, brighter
+  return e;
 }
 function buildEnemyProcedural(g,type){
   const mat=type==='shooter'?MAT_SHOOT:type==='boss'?MAT_BOSS:type==='dummy'?MAT_DUMMY:MAT_CHASER;
@@ -5945,7 +6016,7 @@ function dropPickup(pos,kind){
 const state={mode:'menu',running:false,over:false,wave:0,score:0,kills:0,spawnQueue:0,waveBreak:0,t:0,acc:{shots:0,hits:0},
              boss:null,best:save.get('best',0)|0,startDelay:0,shake:0,
              stage:1,mapId:'foundry',mods:{},mod:null,portalOpen:false,portal:null,seed:0,bestStage:save.get('bestStage',0)|0,
-             scrap:0,offer:null,fab:null,waveT:0,forced:false,hitStop:0,impactFrames:0,cores:0,evoFired:{},ascFired:{}};
+             scrap:0,offer:null,fab:null,waveT:0,forced:false,hitStop:0,impactFrames:0,cores:0,evoFired:{},ascFired:{},md:null,trial:null,won:false,barrelKill:false};
 const rangeStats={hits:0,targets:0,dmgLog:[]};
 const keys={};
 let pointerLocked=false, spawnTimer=0, nearInteract=null;
@@ -6163,6 +6234,9 @@ function syncItems(){
 }
 function syncHUD(){
   const s=run.stats;
+  if(state.md){ const md=state.md; uiCharge.textContent=Math.floor(md.charge*100)+'%'; chargeFill.style.width=(md.charge*100)+'%'; uiHeld.textContent=md.held; uiBanked.textContent=md.banked;
+    uiExtract.textContent=md.extract?'\u00b7 extraction '+Math.ceil(md.extractT)+' s':md.closed?'\u00b7 window closed':''; }
+  if(state.trial){ const tr=state.trial, g=tr.def.goal; uiTrialName.textContent=tr.def.name; uiTrialGoal.textContent=g.n!==undefined?tr.prog+' / '+g.n:'Survive'; const t=Math.max(0,Math.ceil(tr.t)); uiTrialTime.textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); }
   uiWave.textContent=Math.max(1,state.wave);
   uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue>0?' +'+state.spawnQueue:''; uiScrap.textContent=state.scrap;
   const nb=state.wave>0?(BOSS_EVERY-(state.wave%BOSS_EVERY))%BOSS_EVERY:BOSS_EVERY;
@@ -6211,6 +6285,8 @@ function syncCompass(){
   if(state.boss&&!state.boss.dead)mark(state.boss.group.position.x,state.boss.group.position.z,'boss','&#9650;');
   if(state.portalOpen&&state.portal)mark(state.portal.position.x,state.portal.position.z,'portal','&#9679;');
   if(state.fab)mark(state.fab.pos.x,state.fab.pos.z,'fab','&#9635;');
+  if(state.md&&state.md.term)mark(state.md.term.x,state.md.term.z,'term','&#9671;');
+  if(state.md&&state.md.extract)mark(state.md.extract.pos.x,state.md.extract.pos.z,'extract','&#9650;');
   compassEl.innerHTML=html;
 }
 /* ---- 26-items.js ---- */
@@ -6368,18 +6444,30 @@ function startWave(nw){
   const boss=nw%BOSS_EVERY===0;
   const base=Math.min(4+Math.round(nw*2.2),34);
   state.spawnQueue=boss?Math.round(base*0.5):base;
-  if(boss){
-    SFX.boss(); showBanner('Wave '+nw,'Warden inbound',true);
-    const e=makeEnemy('boss',nw);
-    let a=Math.random()*Math.PI*2;
-    e.group.position.set(Math.cos(a)*(ARENA-6),0,Math.sin(a)*(ARENA-6));
-    if(nav.ready){ const k=navNearestOpen(e.group.position.x,e.group.position.z); if(k>=0)navCentre(k,e.group.position); }
-    e.group.scale.setScalar(.2); e.spawnT=1.2; state.boss=e; e.mk=state.stage; e.summonT=6; e.burstLeft=0; e.shieldT=0; e.shieldUsed=false;
-    const pats=[]; if(e.mk>=2)pats.push('summons'); if(e.mk>=3)pats.push('triple burst'); if(e.mk>=4)pats.push('shield phase');
-    bossName.textContent='Warden Mk.'+e.mk+(pats.length?' — '+pats.join(', '):'');
-  }else{ SFX.wave(); showBanner('Wave '+nw,'Incoming'); }
+  if(boss){ showBanner('Wave '+nw,'Warden inbound',true); spawnWarden(nw,state.stage); }
+  else{ SFX.wave(); showBanner('Wave '+nw,'Incoming'); }
   if(state.wave>state.best){ state.best=state.wave; save.set('best',state.best); }
   syncHUD();
+}
+function spawnWarden(nw,mk){
+  SFX.boss();
+  const e=makeEnemy('boss',nw);
+  let a=Math.random()*Math.PI*2;
+  e.group.position.set(Math.cos(a)*(ARENA-6),0,Math.sin(a)*(ARENA-6));
+  if(nav.ready){ const k=navNearestOpen(e.group.position.x,e.group.position.z); if(k>=0)navCentre(k,e.group.position); }
+  e.group.scale.setScalar(.2); e.spawnT=1.2; state.boss=e; e.mk=mk; e.summonT=6; e.burstLeft=0; e.shieldT=0; e.shieldUsed=false;
+  const pats=[]; if(e.mk>=2)pats.push('summons'); if(e.mk>=3)pats.push('triple burst'); if(e.mk>=4)pats.push('shield phase');
+  bossName.textContent='Warden Mk.'+e.mk+(pats.length?' — '+pats.join(', '):'');
+  return e;
+}
+/* one spawn at the arena edge, away from the player, nav-snapped; `type` chaser | shooter | elite */
+function spawnAt(type,wave){
+  let x,z,tries=0;
+  do{ const a=Math.random()*Math.PI*2, r=ARENA-4-Math.random()*6; x=Math.cos(a)*r; z=Math.sin(a)*r; tries++; }while(tries<25&&(Math.hypot(x-player.pos.x,z-player.pos.z)<14));
+  const e=makeEnemy(type==='elite'?'chaser':type,wave,{elite:type==='elite'});
+  if(nav.ready){ const k=navNearestOpen(x,z); if(k>=0){ navCentre(k,e.group.position); } else e.group.position.set(x,0,z); } else e.group.position.set(x,0,z);
+  if(e.type==='chaser'&&state.mods.swift)e.speedMul=1.25;
+  e.group.scale.setScalar(.2*e.size); e.spawnT=0.45; return e;
 }
 function spawnOne(){
   const shooterChance=(state.wave<2?0:Math.min(.15+state.wave*.05,.45))+(state.mods.lancers?0.25:0);
@@ -6432,7 +6520,7 @@ function bossDefeated(pos){
 }
 function buildStage(stage){
   clearWorld(); if(state.portal){ scene.remove(state.portal); state.portal=null; }
-  const m=stageMap(stage); state.mapId=m.id; m.build(); spawnFabricator(m.spawn);
+  const m=stageMap(stage); state.mapId=m.id; m.build(); if(run.kind!=='trial')spawnFabricator(m.spawn);
   const mod=stageMod(stage); state.mod=mod; state.mods={}; if(mod)state.mods[mod.id]=true;
   state.portalOpen=false; state.boss=null; state.spawnQueue=0; state.waveBreak=0;
   resetPlayerFor('run',m.spawn); player.hp=Math.max(player.hp,run.stats.maxHp*0.6);
@@ -6452,6 +6540,105 @@ function nextStage(){
   });
   after(1.1,()=>{ stageFadeT=0; });
 }
+
+/* ============================ Meltdown Protocol ============================ */
+function newMeltdown(){ return {credits:0,elapsed:0,charge:0,spawnT:0,wardens:[false,false,false],held:0,banked:0,extract:null,extractT:0,dump:false,closed:false,openedAt:0,term:null}; }
+function meltdownTick(dt){
+  const md=state.md; if(!md||state.won)return;
+  md.elapsed+=dt; md.charge=Math.min(1,md.elapsed/MELTDOWN.duration);
+  state.wave=1+Math.floor(md.elapsed/60*2.2);   // enemy scaling follows the clock: ~wave 25 at 11 minutes
+  md.credits+=MELTDOWN.creditRate(md.elapsed/60)*dt;   // credits bank while the field is clear
+  MELTDOWN.wardenAt.forEach((th,i)=>{ if(!md.wardens[i]&&md.charge>=th&&enemies.length<20){ md.wardens[i]=true; showBanner('Warden Mk.'+(i+1),'Reactor at '+Math.round(th*100)+'%',true); spawnWarden(state.wave,i+1); } });
+  /* the Director: spend credits on cards, respecting the alive cap; the extraction window dumps the budget as fast as the cap allows */
+  md.spawnT-=dt;
+  if(md.spawnT<=0&&enemies.length<MELTDOWN.aliveCap){
+    const c=MELTDOWN.cards; let pick=null;
+    if(md.credits>=c.elite&&Math.random()<(md.dump?0.5:0.22))pick='elite';
+    else if(md.credits>=c.shooter&&Math.random()<0.4)pick='shooter';
+    else if(md.credits>=c.chaser)pick='chaser';
+    if(pick){ md.credits-=c[pick]; spawnAt(pick,state.wave); md.spawnT=md.dump?MELTDOWN.dumpCadence:MELTDOWN.cadence; }
+    else md.spawnT=0.2;
+  }
+  if(md.charge>=1&&!md.extract&&!md.closed)openExtraction();
+  if(md.extract){
+    md.extractT-=dt; md.extract.ring.rotation.y+=dt*1.5;
+    if(Math.hypot(player.pos.x-md.extract.pos.x,player.pos.z-md.extract.pos.z)<2.2&&Math.abs(player.pos.y-md.extract.pos.y)<1.5){ extracted(); return; }
+    if(md.extractT<=0){ scene.remove(md.extract.g); md.extract=null; md.closed=true; md.dump=false; showBanner('Window closed','The pad is gone. Hold out.',false); say('Extraction window <b>closed</b>','warn'); }
+  }
+}
+function openExtraction(){
+  const md=state.md; let p=null;
+  for(let k=0;k<80;k++){ const x=(Math.random()*2-1)*(ARENA-5), z=(Math.random()*2-1)*(ARENA-5); const c=navNearestOpen(x,z); if(c<0)continue; const q=navCentre(c,new THREE.Vector3()); if(Math.hypot(q.x-player.pos.x,q.z-player.pos.z)<15)continue; p=q; break; }
+  if(!p)p=navCentre(navNearestOpen(0,0),new THREE.Vector3());
+  const g=new THREE.Group();
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.4,.3,32),new THREE.MeshStandardMaterial({color:0x1a2230,roughness:.5,metalness:.6,emissive:0x2ecc71,emissiveIntensity:.5})); base.position.y=.15; g.add(base);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(2.0,.12,10,48),basicMat(0x3ddc84)); ring.rotation.x=Math.PI/2; ring.position.y=.4; g.add(ring);
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.9,14,24,1,true),new THREE.MeshBasicMaterial({color:0x3ddc84,transparent:true,opacity:.14,side:THREE.DoubleSide,depthWrite:false})); beam.position.y=7; g.add(beam);
+  const gl=glowSprite(0x3ddc84,8); gl.position.y=2; g.add(gl);
+  const lab=makeLabel('EXTRACTION','#3ddc84',.9); lab.position.y=4.6; g.add(lab);
+  g.position.copy(p); scene.add(g);
+  md.extract={pos:p.clone(),g:g,ring:ring}; md.extractT=MELTDOWN.extractWindow; md.dump=true; md.openedAt=md.elapsed;
+  SFX.portal(); showBanner('Extraction open','Reach the pad within 90 s — the Director is dumping its budget',true); say('<b>Extraction pad</b> open','item'); syncHUD();
+}
+/* Core Shards: every Warden drops one; hold it (+20 % item drops, +12 % enemy damage each, cap 5) or bank it at the terminal */
+function heldShards(){ return state.md?Math.min(MELTDOWN.shardHoldCap,state.md.held):0; }
+function addShard(){ const md=state.md; if(!md)return; md.held++; SFX.item(); say('<b>Core Shard</b> recovered &middot; holding '+md.held,'item'); showBanner('Core Shard','Bank it at the terminal, or hold it for the bonus',true); syncHUD(); }
+function bankShards(){ const md=state.md; if(!md||md.held<=0){ say('No shards to bank','warn'); return; } md.banked+=md.held; say('Banked <b>'+md.held+'</b> shard'+(md.held===1?'':'s')+' &middot; score locked','item'); md.held=0; SFX.item(); syncHUD(); }
+function spawnTerminal(){
+  let p=null; for(let k=0;k<60;k++){ const x=(Math.random()*2-1)*(ARENA-5), z=(Math.random()*2-1)*(ARENA-5); const c=navNearestOpen(x,z); if(c<0)continue; const q=navCentre(c,new THREE.Vector3());
+    if(Math.hypot(q.x-player.pos.x,q.z-player.pos.z)<8)continue; let clear=true; for(const it of interactables)if(Math.hypot(it.pos.x-q.x,it.pos.z-q.z)<5)clear=false; if(!clear)continue; p=q; break; }
+  if(!p)return;
+  const g=new THREE.Group(); const m=MODELS.ok?spawnProp('locker'):null;
+  if(m){ const b=new THREE.Box3().setFromObject(m); const sz=b.getSize(new THREE.Vector3()); const k=2.0/Math.max(sz.y,0.01); m.scale.setScalar(k); m.position.y=-b.min.y*k; g.add(m); }
+  else { const box=new THREE.Mesh(new THREE.BoxGeometry(1,2,.6),stdMat(0x2c3745,.6,.4)); box.position.y=1; g.add(box); }
+  const gl=glowSprite(0x6fe3ff,4); gl.position.y=2.2; g.add(gl); const lab=makeLabel('SHARD TERMINAL','#6fe3ff',.7); lab.position.y=3.1; g.add(lab);
+  g.position.copy(p); world.add(g);
+  interactables.push({pos:p.clone(),r:2.4,label:'Bank Core Shards',action:bankShards}); state.md.term=p.clone();
+}
+/* scoring: banked x1000 + held x2500 (extraction only) + kills + time bonus (up to 1000 for a fast extraction) */
+function meltdownScore(extractedNow){
+  const md=state.md; const timeBonus=extractedNow?Math.round(1000*Math.max(0,1-(md.elapsed-md.openedAt)/MELTDOWN.extractWindow)):0;
+  return {banked:md.banked*1000,held:extractedNow?md.held*2500:0,kills:state.kills,time:timeBonus,total:md.banked*1000+(extractedNow?md.held*2500:0)+state.kills+timeBonus};
+}
+function extracted(){
+  const md=state.md; state.won=true; state.running=false; player.alive=true;
+  const sc=meltdownScore(true); state.score=sc.total;
+  const best=save.get('meltdownBest',{}); const cid=CH().id; const prev=best[cid]||0; if(sc.total>prev){ best[cid]=sc.total; save.set('meltdownBest',best); }
+  const code=encodeScoreCode({mode:MODE_IDS.meltdown,char:run.charIdx,seed:state.seed,score:sc.total,detail:(md.banked<<8)|(Math.min(15,md.held)<<4)|Math.min(15,state.kills>>6)});
+  if(document.pointerLockElement)document.exitPointerLock(); SFX.bossKill();
+  showExtracted(sc,prev,code);
+}
+
+/* ============================ Trials ============================ */
+function newTrial(def){ return {def:def,t:def.time,prog:0,spawnT:0,credits:0,pulseOn:false,done:false,failed:false}; }
+function trialTick(dt){
+  const tr=state.trial; if(!tr||tr.done)return;
+  tr.t-=dt;
+  const g=tr.def.goal;
+  if(g.kind==='pulses'&&mapData.pulse){ const pu=mapData.pulse; if(pu.active&&!tr.pulseOn)tr.pulseOn=true; if(!pu.active&&tr.pulseOn){ tr.pulseOn=false; if(pu.hit)return trialEnd(false,'Caught by the shockwave'); tr.prog++; } }
+  if(g.n!==undefined&&tr.prog>=g.n)return trialEnd(true);
+  if(tr.t<=0)return trialEnd(g.kind==='survive');
+  tr.credits+=tr.def.rate*dt; tr.spawnT-=dt;
+  if(tr.spawnT<=0&&enemies.length<12&&tr.credits>=MELTDOWN.cards.chaser){
+    let r=Math.random(), type='chaser'; for(const k in tr.def.types){ r-=tr.def.types[k]; if(r<=0){ type=k; break; } }
+    if(type==='shooter'&&tr.credits<MELTDOWN.cards.shooter)type='chaser';
+    tr.credits-=MELTDOWN.cards[type]; spawnAt(type,state.wave); tr.spawnT=0.35;
+  }
+}
+function trialProgress(kind,e,head){
+  const tr=state.trial; if(!tr||tr.done)return; const g=tr.def.goal;
+  if(g.kind==='kills'&&kind==='kill')tr.prog++;
+  else if(g.kind==='headshots'&&kind==='kill'&&head)tr.prog++;
+  else if(g.kind==='barrelKills'&&kind==='kill'&&state.barrelKill)tr.prog++;
+  else if(g.kind==='highKills'&&kind==='kill'&&player.pos.y>=2.5)tr.prog++;
+}
+function trialEnd(ok,why){
+  const tr=state.trial; if(!tr||tr.done)return; tr.done=true; tr.failed=!ok; state.running=false;
+  if(ok){ const marks=save.get('trials',{}); marks[tr.def.id]=true; save.set('trials',marks); SFX.bossKill(); } else SFX.over();
+  if(document.pointerLockElement)document.exitPointerLock();
+  showTrialEnd(ok,why);
+}
+function trialMarks(){ return Object.keys(save.get('trials',{})).length; }
 
 /* ---- 29-shooting.js ---- */
 /* ============================ shooting ============================ */
@@ -6554,20 +6741,23 @@ function killEnemy(e,head){
   state.hitStop=Math.max(state.hitStop,e.type==='boss'?0.14:0.06); state.impactFrames++;
   if(evo('syringe')){ player.adrenal=Math.min(3,player.adrenal+1); player.adrenalT=3; fired('adrenal'); }   // Adrenal Cascade
   if(evo('coil')){ player.hemoT=2; }                                                                        // Hemolattice speed   // hit-stop: the simulation slows for 60 ms (140 ms on a Warden); rendering never pauses
-  const pts=(e.type==='boss'?1500:e.type==='shooter'?170:110)*(head?2:1);
+  const pts=(e.type==='boss'?1500:e.elite?450:e.type==='shooter'?170:110)*(head?2:1);
+  if(run.kind==='trial')trialProgress('kill',e,head);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
-    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); addCore(); after(0.9,()=>{ if(!state.offer)openForge(); }); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
+    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); addCore(); after(0.9,()=>{ if(!state.offer)openForge(); });
+    if(run.kind==='meltdown')addShard(); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
-    state.boss=null; bossDefeated(e.group.position.clone());
+    state.boss=null; if(run.kind==='endless')bossDefeated(e.group.position.clone());   // Meltdown / trials: no stage portal
   }else{
     SFX.kill();
     spark(e.group.position.clone().setY(1.1),e.type==='shooter'?0xd07bff:0xff7a4d,16);
     const sc=SCRAP_VALUE[e.elite?'elite':e.type]||0; addScrap(sc,e.group.position.clone().setY(1.2));
-    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>'+(sc?' <span class="scrap">&middot; '+sc+' scrap</span>':''));
-    const r=Math.random();
-    if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
+    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.elite?'elite':e.type]+' down <b>+'+pts+'</b>'+(sc?' <span class="scrap">&middot; '+sc+' scrap</span>':''));
+    const r=Math.random(), itemChance=0.06*(1+MELTDOWN.shardDrop*heldShards());   // held Core Shards raise the drop chance
+    if(run.kind==='trial'){ if(r<0.16)dropPickup(e.group.position,'heal'); }
+    else if(r<itemChance)dropPickup(e.group.position,'item'); else if(r<itemChance+0.16&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }
   removeEnemy(e,true);
   syncHUD();
@@ -6618,6 +6808,7 @@ function shakeCam(amp,dist){ const k=dist>0?Math.max(0,1-dist/22):1; state.shake
 function hurtPlayer(amount){
   if(!state.running||state.mode!=='run'||player.iframes>0)return;
   if(asc('warcry')&&player.abActive>0)amount*=0.7;   // Warcry
+  if(run.kind==='meltdown')amount*=1+MELTDOWN.shardEnemyDmg*heldShards();   // held Core Shards: enemies hit harder
   if(player.shield>0){ const a=Math.min(player.shield,amount); player.shield-=a; amount-=a; spark(player.pos.clone().setY(1.2),0x6fe3ff,5); if(player.shield<=0){shieldMesh.visible=false;} }
   if(amount<=0){ syncHUD(); return; }
   player.hp-=amount; player.lastHurt=0; player.flinch=1; player.hitT=0.45; shakeCam(Math.min(0.5,0.2+amount/60),0);
@@ -6901,7 +7092,9 @@ function update(dt){
   /* ---- waves ---- */
   if(mode==='run'){
     state.waveT+=dt;
-    if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(state.wave+1); spawnTimer=0.5; } }
+    if(run.kind==='meltdown')meltdownTick(dt);
+    else if(run.kind==='trial')trialTick(dt);
+    else if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(state.wave+1); spawnTimer=0.5; } }
     else if(state.spawnQueue>0){
       spawnTimer-=dt;
       if(spawnTimer<=0&&enemies.length<16){ spawnOne(); spawnTimer=0.35; syncHUD(); }
@@ -6954,7 +7147,7 @@ function update(dt){
     p.t-=dt;
     if(p.g.position.distanceTo(player.pos.clone().setY(p.g.position.y))<1.35){
       if(p.kind==='heal'){ player.hp=Math.min(s.maxHp,player.hp+Math.round(s.maxHp*.28)); SFX.pick(); say('Repair kit <b>+'+Math.round(s.maxHp*.28)+'</b>'); }
-      else queueOffer(p.items||1);   // every item is the player's pick, never an auto-roll
+      else if(run.kind!=='trial')queueOffer(p.items||1);   // every item is the player's pick, never an auto-roll (trials carry no items)
       scene.remove(p.g); pickups.splice(i,1); syncHUD(); continue;
     }
     if(p.t<=0){ scene.remove(p.g); pickups.splice(i,1); }
@@ -7029,9 +7222,9 @@ function resetPlayerFor(mode,pos){
   player.alive=true; player.abCd=0; player.abActive=0; player.abStock=run.stats.abStock||1; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');
 }
-function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); }
+function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); if(state.md&&state.md.extract){ scene.remove(state.md.extract.g); state.md.extract=null; } }   // also drops a leftover extraction pad
 function goLobby(){
-  clearTimers(); state.offer=null; state.fab=null;
+  clearTimers(); state.offer=null; state.fab=null; run.kind='endless'; state.md=null; state.trial=null; state.won=false; hud.dataset.kind='';
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildLobby(); setMode('lobby');
   resetPlayerFor('lobby',new THREE.Vector3(0,0,6));
@@ -7040,7 +7233,7 @@ function goLobby(){
   SFX.portal(); syncHUD();
 }
 function goRange(){
-  clearTimers(); state.offer=null; state.fab=null;
+  clearTimers(); state.offer=null; state.fab=null; run.kind='endless'; state.md=null; state.trial=null; state.won=false; hud.dataset.kind='';
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildRange(); setMode('range');
   run.items={}; computeStats(); syncItems();
@@ -7048,18 +7241,25 @@ function goRange(){
   rangeStats.hits=0; rangeStats.targets=0; rangeStats.dmgLog=[];
   state.boss=null; SFX.portal(); showBanner('Practice range','Fire at will'); syncHUD();
 }
-function goRun(seed){
+function goRun(seed,kind,trialId){
   clearTimers();
+  run.kind=kind||'endless'; run.trial=run.kind==='trial'?(TRIAL_BY_ID[trialId]||TRIALS[0]):null;
   const qs=/[?&]seed=(\d+)/.exec(location.search);
   state.seed=seed||(qs?parseInt(qs[1]):(Date.now()%1e9));
-  run.order=makeRunOrder(state.seed);
+  if(run.kind==='trial'){ if(run.trial.char){ const ci=CHARS.findIndex(c=>c.id===run.trial.char); if(ci>=0)selectChar(ci,false); } run.order={maps:[run.trial.map],mods:[]}; }
+  else if(run.kind==='meltdown')run.order={maps:[MAPS[Math.floor((state.seed/7)%MAPS.length)].id],mods:[]};
+  else run.order=makeRunOrder(state.seed);
+  state.md=run.kind==='meltdown'?newMeltdown():null; state.trial=run.kind==='trial'?newTrial(run.trial):null; state.won=false;
   run.items={}; run.itemsTaken=0; run.evos={}; run.asc=null; computeStats(); syncItems();
   state.cores=0; state.evoFired={}; state.ascFired={}; player.adrenal=0; player.adrenalT=0; player.kineticT=0; player.hemoT=0; player.siegeT=0; player.freeAmmoT=0; player.shotIdx=0; player.naniteFired=false;
   state.score=0; state.kills=0; state.over=false; state.waveBreak=0; state.t=0; state.wave=0;
   state.acc.shots=0; state.acc.hits=0; state.spawnQueue=0; state.boss=null; state.startDelay=3; state.stage=1; state.scrap=0; state.offer=null; state.waveT=0;
   if(state.portal){ scene.remove(state.portal); state.portal=null; }
-  setMode('run'); buildStage(1); player.hp=run.stats.maxHp;
-  SFX.portal(); showBanner(CH().name+' deployed','Stage 1 · '+stageMap(1).name); syncHUD();
+  setMode('run'); hud.dataset.kind=run.kind; buildStage(1); player.hp=run.stats.maxHp;
+  if(run.kind==='meltdown'){ state.startDelay=999; spawnTerminal(); if(mapData.pulse)mapData.pulse.period=24; SFX.portal(); showBanner('Meltdown Protocol',stageMap(1).name+' · extract at 100%',true); }
+  else if(run.kind==='trial'){ state.startDelay=999; state.wave=3; run.items={}; computeStats(); syncItems(); if(mapData.pulse&&run.trial.pulsePeriod){ mapData.pulse.period=run.trial.pulsePeriod; mapData.pulse.t=6; } SFX.portal(); showBanner(run.trial.name,run.trial.desc); }
+  else { SFX.portal(); showBanner(CH().name+' deployed','Stage 1 · '+stageMap(1).name); }
+  syncHUD();
 }
 function resumePlay(){ state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); last=performance.now(); acc=0; }
 function enterPlay(){ audio(); if(TOUCH){ resumePlay(); return; } canvas.requestPointerLock(); }
@@ -7220,14 +7420,17 @@ function showMenu(){
   clearWorld(); buildLobby(); avatar.visible=false;
   showScreen(
    '<h1>Ferrous <span>Arena</span></h1>'+
-   '<div class="tag">Roguelite wave shooter &middot; best wave '+state.best+' &middot; best stage '+state.bestStage+'</div>'+
+   '<div class="tag">Roguelite wave shooter &middot; best wave '+state.best+' &middot; best stage '+state.bestStage+(function(){ const b=save.get('meltdownBest',{}); const m=Math.max(0,...Object.values(b)); return m?' &middot; best meltdown '+m.toLocaleString():''; })()+'</div>'+
    controlsHTML()+
    '<button id="goLobby">Enter Lobby</button>'+
-   '<div class="btns"><button class="ghost" id="goQuick">Quick deploy as '+CH().name+'</button><button class="ghost" id="goItems">Item codex</button></div>'+
+   '<div class="btns"><button class="ghost" id="goQuick">Quick deploy as '+CH().name+'</button><button class="ghost" id="goMelt" style="border-color:rgba(255,106,213,.5)">Meltdown Protocol</button></div>'+
+   '<div class="btns"><button class="ghost" id="goTrials">Trials ('+trialMarks()+' / '+TRIALS.length+')</button><button class="ghost" id="goItems">Item codex</button></div>'+
    '<button class="ghost" id="goSettings">Settings</button>'+
    '<p class="note">Pick an operative in the lobby, warm up on the range, then deploy. A Warden boss arrives every '+BOSS_EVERY+' waves. Quality: '+(Q.auto?'auto ('+Q.tier+')':Q.tier)+'.</p>');
   $('goLobby').onclick=()=>{ goLobby(); enterPlay(); };
   $('goQuick').onclick=()=>{ goRun(); enterPlay(); };
+  $('goMelt').onclick=()=>{ goRun(null,'meltdown'); enterPlay(); };
+  $('goTrials').onclick=showTrials;
   $('goItems').onclick=showCodex;
   $('goSettings').onclick=()=>showSettings(showMenu);
 }
@@ -7276,11 +7479,14 @@ function showLobbyPanel(){
   showScreen('<h1>Operative <span>Roster</span></h1><div class="tag">Click to select &middot; walk to a pod and press E in the lobby</div>'+
     charCardsHTML()+
     '<div class="btns"><button id="res">Back to lobby</button><button id="rng" class="ghost">Shooting range</button>'+
-    '<button id="dep">Deploy now</button><button id="menu" class="ghost">Main menu</button></div>',true);
+    '<button id="dep">Deploy &middot; Endless</button><button id="depM" style="background:linear-gradient(180deg,#ff8ae0,#c93fb0);color:#2a0620">Deploy &middot; Meltdown</button>'+
+    '<button id="trials" class="ghost">Trials ('+trialMarks()+' / '+TRIALS.length+')</button><button id="menu" class="ghost">Main menu</button></div>',true);
   bindCharCards();
   $('res').onclick=enterPlay;
   $('rng').onclick=()=>{ goRange(); enterPlay(); };
   $('dep').onclick=()=>{ goRun(); enterPlay(); };
+  $('depM').onclick=()=>{ goRun(null,'meltdown'); enterPlay(); };
+  $('trials').onclick=showTrials;
   $('menu').onclick=showMenu;
 }
 function inventoryHTML(){
@@ -7308,26 +7514,71 @@ function showPause(){
   $('menu').onclick=showMenu;
 }
 function gameOver(){
+  if(run.kind==='trial'){ state.running=false; state.over=true; player.alive=false; trialEnd(false,'Systems down'); return; }
+  if(run.kind==='meltdown'){ const sc=meltdownScore(false); state.score=sc.total; const best=save.get('meltdownBest',{}); if(sc.total>(best[CH().id]||0)){ best[CH().id]=sc.total; save.set('meltdownBest',best); } }
   state.running=false; state.over=true; player.alive=false;
   if(document.pointerLockElement)document.exitPointerLock(); SFX.over();
   const acc=state.acc.shots?Math.round(state.acc.hits/state.acc.shots*100):0;
   showScreen(
    '<h1>Systems <span style="color:var(--hot)">Down</span></h1>'+
-   '<div class="tag">'+CH().name+' fell on wave '+state.wave+', stage '+state.stage+' ('+stageMap(state.stage).name+') &middot; best wave '+state.best+' &middot; seed '+state.seed+'</div>'+
+   '<div class="tag">'+(run.kind==='meltdown'?CH().name+' fell at '+Math.floor(state.md.charge*100)+'% reactor charge on '+stageMap(1).name+' &middot; '+state.md.banked+' shard'+(state.md.banked===1?'':'s')+' banked':CH().name+' fell on wave '+state.wave+', stage '+state.stage+' ('+stageMap(state.stage).name+') &middot; best wave '+state.best)+' &middot; seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
    '<div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
    '<div><div class="k">Stage</div><div class="v">'+state.stage+'</div></div>'+
    '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div>'+
    '<div><div class="k">Items</div><div class="v">'+run.itemsTaken+'</div></div></div>'+inventoryHTML()+
-   '<button id="go">Redeploy as '+CH().name+'</button>'+
+   (run.kind==='meltdown'?scoreCodeHTML(encodeScoreCode({mode:MODE_IDS.meltdown,char:run.charIdx,seed:state.seed,score:state.score,detail:state.md.banked<<8})):'')+
+   '<button id="go">Redeploy as '+CH().name+(run.kind==='meltdown'?' &middot; Meltdown':'')+'</button>'+
    '<div class="btns"><button id="same" class="ghost">Replay this seed</button><button id="lob" class="ghost">Return to lobby</button></div>'+
    '<button id="menu" class="ghost">Main menu</button>');
-  hud.classList.remove('on');
-  $('go').onclick=()=>{ goRun(); enterPlay(); };
-  $('same').onclick=()=>{ goRun(state.seed); enterPlay(); };
+  hud.classList.remove('on'); bindCode();
+  $('go').onclick=()=>{ goRun(null,run.kind); enterPlay(); };
+  $('same').onclick=()=>{ goRun(state.seed,run.kind); enterPlay(); };
   $('lob').onclick=()=>{ goLobby(); enterPlay(); };
   $('menu').onclick=showMenu;
+}
+/* ---- Meltdown: extraction (the win screen), score code, trials list + result ---- */
+function scoreCodeHTML(code){ return '<div class="code"><span class="k">Score code</span><b id="scCode">'+code+'</b><button class="ghost" id="scCopy">Copy</button></div>'; }
+function bindCode(){ const b=$('scCopy'); if(!b)return; b.onclick=()=>{ const t=$('scCode').textContent; try{ navigator.clipboard.writeText(t); b.textContent='Copied'; }catch(e){ b.textContent=t; } SFX.ui(); }; }
+function showExtracted(sc,prev,code){
+  hud.classList.remove('on');
+  showScreen('<h1>Extracted <span style="color:var(--good)">&#10003;</span></h1>'+
+    '<div class="tag">'+CH().name+' reached the pad on '+stageMap(1).name+' &middot; '+(sc.total>prev?'new best':'best '+prev.toLocaleString())+' &middot; seed '+state.seed+'</div>'+
+    '<div class="stats"><div><div class="k">Score</div><div class="v">'+sc.total.toLocaleString()+'</div></div>'+
+    '<div><div class="k">Banked shards</div><div class="v">'+state.md.banked+' <small style="font-size:11px;color:var(--dim)">+'+sc.banked+'</small></div></div>'+
+    '<div><div class="k">Held shards</div><div class="v">'+state.md.held+' <small style="font-size:11px;color:var(--dim)">+'+sc.held+'</small></div></div>'+
+    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
+    '<div><div class="k">Time bonus</div><div class="v">'+sc.time+'</div></div>'+
+    '<div><div class="k">Items</div><div class="v">'+run.itemsTaken+(state.md.banked?' <small style="font-size:11px;color:var(--gold)">+1 banked</small>':'')+'</div></div></div>'+
+    inventoryHTML()+scoreCodeHTML(code)+
+    '<button id="go">Run it again &middot; Meltdown</button>'+
+    '<div class="btns"><button id="lob" class="ghost">Return to lobby</button><button id="menu" class="ghost">Main menu</button></div>');
+  bindCode();
+  $('go').onclick=()=>{ goRun(null,'meltdown'); enterPlay(); };
+  $('lob').onclick=()=>{ goLobby(); enterPlay(); };
+  $('menu').onclick=showMenu;
+}
+function showTrials(){
+  const marks=save.get('trials',{});
+  showScreen('<h1>Trials</h1><div class="tag">Six timed challenges &middot; restricted loadouts &middot; '+trialMarks()+' of '+TRIALS.length+' marks</div>'+
+    '<div class="trials">'+TRIALS.map(t=>'<button data-t="'+t.id+'" class="'+(marks[t.id]?'done':'')+'"><span>'+t.name+' <small>&middot; '+MAP_BY_ID[t.map].name+' &middot; '+t.time+' s'+(t.char?' &middot; '+CHARS.find(c=>c.id===t.char).name:'')+'</small></span><small>'+t.desc+'</small>'+(marks[t.id]?'<i>&#10003; mark earned</i>':'')+'</button>').join('')+'</div>'+
+    '<button class="ghost" id="back">Back</button>',true);
+  card.querySelectorAll('.trials button').forEach(b=>{ b.onclick=()=>{ goRun(null,'trial',b.dataset.t); enterPlay(); }; });
+  $('back').onclick=state.mode==='lobby'?showLobbyPanel:showMenu;
+}
+function showTrialEnd(ok,why){
+  const tr=state.trial, g=tr.def.goal; hud.classList.remove('on');
+  showScreen('<h1>'+(ok?'Trial <span style="color:var(--good)">complete</span>':'Trial <span style="color:var(--hot)">failed</span>')+'</h1>'+
+    '<div class="tag">'+tr.def.name+' &middot; '+(ok?'Trial Mark earned ('+trialMarks()+' / '+TRIALS.length+')':(why||'Time ran out'))+'</div>'+
+    '<div class="stats"><div><div class="k">Goal</div><div class="v">'+(g.n!==undefined?tr.prog+' / '+g.n:(ok?'Survived':'Fell'))+'</div></div>'+
+    '<div><div class="k">Time left</div><div class="v">'+Math.max(0,Math.ceil(tr.t))+' s</div></div>'+
+    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div></div>'+
+    '<button id="retry">'+(ok?'Run it again':'Retry')+'</button>'+
+    '<div class="btns"><button id="list" class="ghost">All trials</button><button id="lob" class="ghost">Return to lobby</button></div>');
+  $('retry').onclick=()=>{ goRun(null,'trial',tr.def.id); enterPlay(); };
+  $('list').onclick=showTrials;
+  $('lob').onclick=()=>{ goLobby(); enterPlay(); };
 }
 
 /* ---- 36-boot.js ---- */
@@ -7340,7 +7591,7 @@ window.__ARENA__={applyLook:applyLook,camYaw:camYaw,barrels:barrels,explodeBarre
   computeStats:computeStats,selectChar:selectChar,giveItem:giveItem,useAbility:useAbility,goLobby:goLobby,goRange:goRange,goRun:goRun,
   startWave:startWave,pickups:pickups,targets:targets,interactables:interactables,perf:perf,Q:Q,setQuality:setQuality,renderer:renderer,toggleDebug:toggleDebug,inp:inp,touch:touch,pad:pad,TOUCH:TOUCH,nav:nav,MAPS:MAPS,buildStage:buildStage,nextStage:nextStage,mapData:mapData,stageMap:stageMap,navPath:navPath,navNearestOpen:navNearestOpen,bossDefeated:bossDefeated,MODELS:MODELS,SETTINGS:SETTINGS,showSettings:showSettings,spawnCharacter:spawnCharacter,GUN_MOUNT:GUN_MOUNT,avatar:avatar,podDisplays:podDisplays,makeEnemy:makeEnemy,avatarAnim:function(){return avatarAnim;},corpses:corpses,
   dmgNums:dmgNums,decals:decals,dmgNumber:dmgNumber,WEAPON_FX:WEAPON_FX,CAM:CAM,RIGS:RIGS,LADDER:LADDER,CHAR_BOOST:CHAR_BOOST,calPoints:calPoints,setTheme:setTheme,applyRig:applyRig,addRim:addRim,MOUNTS:MOUNTS,timers:timers,after:after,rayWorld:rayWorld,castShot:castShot,hurtPlayer:hurtPlayer,killEnemy:killEnemy,dealDamage:dealDamage,
-  removeEnemy:removeEnemy,showCodex:showCodex,EVOS:EVOS,ASCENSIONS:ASCENSIONS,openForge:openForge,fuse:fuse,offerAscension:offerAscension,pickAsc:pickAsc,addCore:addCore,forgeEligible:forgeEligible,queueOffer:queueOffer,pickOffer:pickOffer,offerKey:offerKey,closeOffer:closeOffer,openFabricator:openFabricator,fabBuy:fabBuy,scrapPick:scrapPick,rollOffer:rollOffer,addScrap:addScrap,spawnFabricator:spawnFabricator,
+  removeEnemy:removeEnemy,MELTDOWN:MELTDOWN,TRIALS:TRIALS,meltdownTick:meltdownTick,openExtraction:openExtraction,bankShards:bankShards,addShard:addShard,meltdownScore:meltdownScore,encodeScoreCode:encodeScoreCode,decodeScoreCode:decodeScoreCode,showTrials:showTrials,trialEnd:trialEnd,showCodex:showCodex,EVOS:EVOS,ASCENSIONS:ASCENSIONS,openForge:openForge,fuse:fuse,offerAscension:offerAscension,pickAsc:pickAsc,addCore:addCore,forgeEligible:forgeEligible,queueOffer:queueOffer,pickOffer:pickOffer,offerKey:offerKey,closeOffer:closeOffer,openFabricator:openFabricator,fabBuy:fabBuy,scrapPick:scrapPick,rollOffer:rollOffer,addScrap:addScrap,spawnFabricator:spawnFabricator,
   forceStart:function(mode){ state.forced=true; audio(); (mode==='lobby'?goLobby:mode==='range'?goRange:goRun)(); state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); }};
 })();
 </script>

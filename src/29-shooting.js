@@ -98,20 +98,23 @@ function killEnemy(e,head){
   state.hitStop=Math.max(state.hitStop,e.type==='boss'?0.14:0.06); state.impactFrames++;
   if(evo('syringe')){ player.adrenal=Math.min(3,player.adrenal+1); player.adrenalT=3; fired('adrenal'); }   // Adrenal Cascade
   if(evo('coil')){ player.hemoT=2; }                                                                        // Hemolattice speed   // hit-stop: the simulation slows for 60 ms (140 ms on a Warden); rendering never pauses
-  const pts=(e.type==='boss'?1500:e.type==='shooter'?170:110)*(head?2:1);
+  const pts=(e.type==='boss'?1500:e.elite?450:e.type==='shooter'?170:110)*(head?2:1);
+  if(run.kind==='trial')trialProgress('kill',e,head);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
-    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); addCore(); after(0.9,()=>{ if(!state.offer)openForge(); }); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
+    addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); addCore(); after(0.9,()=>{ if(!state.offer)openForge(); });
+    if(run.kind==='meltdown')addShard(); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);
     for(let k=0;k<3;k++){ const a=Math.random()*Math.PI*2; dropPickup(e.group.position.clone().add(new THREE.Vector3(Math.cos(a)*1.5,0,Math.sin(a)*1.5)),'item'); }
-    state.boss=null; bossDefeated(e.group.position.clone());
+    state.boss=null; if(run.kind==='endless')bossDefeated(e.group.position.clone());   // Meltdown / trials: no stage portal
   }else{
     SFX.kill();
     spark(e.group.position.clone().setY(1.1),e.type==='shooter'?0xd07bff:0xff7a4d,16);
     const sc=SCRAP_VALUE[e.elite?'elite':e.type]||0; addScrap(sc,e.group.position.clone().setY(1.2));
-    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>'+(sc?' <span class="scrap">&middot; '+sc+' scrap</span>':''));
-    const r=Math.random();
-    if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
+    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.elite?'elite':e.type]+' down <b>+'+pts+'</b>'+(sc?' <span class="scrap">&middot; '+sc+' scrap</span>':''));
+    const r=Math.random(), itemChance=0.06*(1+MELTDOWN.shardDrop*heldShards());   // held Core Shards raise the drop chance
+    if(run.kind==='trial'){ if(r<0.16)dropPickup(e.group.position,'heal'); }
+    else if(r<itemChance)dropPickup(e.group.position,'item'); else if(r<itemChance+0.16&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }
   removeEnemy(e,true);
   syncHUD();

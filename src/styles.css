@@ -123,6 +123,26 @@
   #lowvig{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .6s;
        background:radial-gradient(ellipse at center,transparent 30%,rgba(150,10,10,.5) 100%)}
 
+  /* Meltdown: charge bar + shards replace the wave readout; trials: goal + clock */
+  #meltbar{left:50%;top:calc(var(--g)*3);transform:translateX(-50%);width:min(440px,60vw);padding:var(--g) calc(var(--g)*2) calc(var(--g)*1.25);display:none}
+  #meltbar .n{display:flex;justify-content:space-between;font-size:var(--label);letter-spacing:.14em;text-transform:uppercase;color:#ff6ad5;margin-bottom:6px}
+  #meltbar .bar{height:8px;border-radius:4px;background:rgba(255,255,255,.09);overflow:hidden}
+  #meltbar .fill{height:100%;width:0;background:linear-gradient(90deg,#9b4dff,#ff6ad5);transition:width .2s}
+  #meltbar .shards{margin-top:6px;font-size:var(--label);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);text-align:center}
+  #meltbar .shards b{color:#6fe3ff} #meltbar .shards em{font-style:normal;color:var(--good)}
+  #trialbar{left:50%;top:calc(var(--g)*3);transform:translateX(-50%);padding:var(--g) calc(var(--g)*3);text-align:center;display:none}
+  #trialbar .v{font:600 var(--hero)/1.1 "Inter",system-ui,sans-serif;font-variant-numeric:tabular-nums;margin-top:4px} #trialbar .v small{font-size:var(--body);color:var(--dim);margin-left:12px;font-weight:500}
+  #hud[data-kind="meltdown"] #topbar,#hud[data-kind="trial"] #topbar{display:none}
+  #hud[data-kind="meltdown"] #meltbar{display:block} #hud[data-kind="trial"] #trialbar{display:block}
+  #hud[data-mode="lobby"] #meltbar,#hud[data-mode="lobby"] #trialbar,#hud[data-mode="range"] #meltbar,#hud[data-mode="range"] #trialbar{display:none}
+  #compass i.term{color:#6fe3ff} #compass i.extract{color:var(--good)}
+  .code{margin-top:16px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap}
+  .code b{font:600 15px/1 ui-monospace,Menlo,monospace;letter-spacing:.08em;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;user-select:all}
+  .code button{margin:0;width:auto;padding:10px 14px;font-size:12px}
+  .trials{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  .trials button{margin:0;text-align:left;padding:14px;background:rgba(255,255,255,.05);color:var(--txt);border:1px solid var(--line);display:flex;flex-direction:column;gap:4px;align-items:flex-start;font:inherit;letter-spacing:0}
+  .trials button.done{border-color:rgba(61,220,132,.6)} .trials button small{font-size:11px;color:var(--dim);font-weight:400} .trials button i{font-style:normal;color:var(--good);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  @media (max-width:640px){ .trials{grid-template-columns:1fr} }
   /* hide per-mode */
   #hud[data-mode="lobby"] #vitals,#hud[data-mode="lobby"] #ammo,#hud[data-mode="lobby"] #topbar,#hud[data-mode="lobby"] #items,#hud[data-mode="lobby"] #ability{display:none}
   #hud[data-mode="range"] #topbar,#hud[data-mode="range"] #items,#hud[data-mode="range"] #hpnum .stat{display:none}

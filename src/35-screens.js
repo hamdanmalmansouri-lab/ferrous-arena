@@ -32,14 +32,17 @@ function showMenu(){
   clearWorld(); buildLobby(); avatar.visible=false;
   showScreen(
    '<h1>Ferrous <span>Arena</span></h1>'+
-   '<div class="tag">Roguelite wave shooter &middot; best wave '+state.best+' &middot; best stage '+state.bestStage+'</div>'+
+   '<div class="tag">Roguelite wave shooter &middot; best wave '+state.best+' &middot; best stage '+state.bestStage+(function(){ const b=save.get('meltdownBest',{}); const m=Math.max(0,...Object.values(b)); return m?' &middot; best meltdown '+m.toLocaleString():''; })()+'</div>'+
    controlsHTML()+
    '<button id="goLobby">Enter Lobby</button>'+
-   '<div class="btns"><button class="ghost" id="goQuick">Quick deploy as '+CH().name+'</button><button class="ghost" id="goItems">Item codex</button></div>'+
+   '<div class="btns"><button class="ghost" id="goQuick">Quick deploy as '+CH().name+'</button><button class="ghost" id="goMelt" style="border-color:rgba(255,106,213,.5)">Meltdown Protocol</button></div>'+
+   '<div class="btns"><button class="ghost" id="goTrials">Trials ('+trialMarks()+' / '+TRIALS.length+')</button><button class="ghost" id="goItems">Item codex</button></div>'+
    '<button class="ghost" id="goSettings">Settings</button>'+
    '<p class="note">Pick an operative in the lobby, warm up on the range, then deploy. A Warden boss arrives every '+BOSS_EVERY+' waves. Quality: '+(Q.auto?'auto ('+Q.tier+')':Q.tier)+'.</p>');
   $('goLobby').onclick=()=>{ goLobby(); enterPlay(); };
   $('goQuick').onclick=()=>{ goRun(); enterPlay(); };
+  $('goMelt').onclick=()=>{ goRun(null,'meltdown'); enterPlay(); };
+  $('goTrials').onclick=showTrials;
   $('goItems').onclick=showCodex;
   $('goSettings').onclick=()=>showSettings(showMenu);
 }
@@ -88,11 +91,14 @@ function showLobbyPanel(){
   showScreen('<h1>Operative <span>Roster</span></h1><div class="tag">Click to select &middot; walk to a pod and press E in the lobby</div>'+
     charCardsHTML()+
     '<div class="btns"><button id="res">Back to lobby</button><button id="rng" class="ghost">Shooting range</button>'+
-    '<button id="dep">Deploy now</button><button id="menu" class="ghost">Main menu</button></div>',true);
+    '<button id="dep">Deploy &middot; Endless</button><button id="depM" style="background:linear-gradient(180deg,#ff8ae0,#c93fb0);color:#2a0620">Deploy &middot; Meltdown</button>'+
+    '<button id="trials" class="ghost">Trials ('+trialMarks()+' / '+TRIALS.length+')</button><button id="menu" class="ghost">Main menu</button></div>',true);
   bindCharCards();
   $('res').onclick=enterPlay;
   $('rng').onclick=()=>{ goRange(); enterPlay(); };
   $('dep').onclick=()=>{ goRun(); enterPlay(); };
+  $('depM').onclick=()=>{ goRun(null,'meltdown'); enterPlay(); };
+  $('trials').onclick=showTrials;
   $('menu').onclick=showMenu;
 }
 function inventoryHTML(){
@@ -120,24 +126,69 @@ function showPause(){
   $('menu').onclick=showMenu;
 }
 function gameOver(){
+  if(run.kind==='trial'){ state.running=false; state.over=true; player.alive=false; trialEnd(false,'Systems down'); return; }
+  if(run.kind==='meltdown'){ const sc=meltdownScore(false); state.score=sc.total; const best=save.get('meltdownBest',{}); if(sc.total>(best[CH().id]||0)){ best[CH().id]=sc.total; save.set('meltdownBest',best); } }
   state.running=false; state.over=true; player.alive=false;
   if(document.pointerLockElement)document.exitPointerLock(); SFX.over();
   const acc=state.acc.shots?Math.round(state.acc.hits/state.acc.shots*100):0;
   showScreen(
    '<h1>Systems <span style="color:var(--hot)">Down</span></h1>'+
-   '<div class="tag">'+CH().name+' fell on wave '+state.wave+', stage '+state.stage+' ('+stageMap(state.stage).name+') &middot; best wave '+state.best+' &middot; seed '+state.seed+'</div>'+
+   '<div class="tag">'+(run.kind==='meltdown'?CH().name+' fell at '+Math.floor(state.md.charge*100)+'% reactor charge on '+stageMap(1).name+' &middot; '+state.md.banked+' shard'+(state.md.banked===1?'':'s')+' banked':CH().name+' fell on wave '+state.wave+', stage '+state.stage+' ('+stageMap(state.stage).name+') &middot; best wave '+state.best)+' &middot; seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
    '<div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
    '<div><div class="k">Stage</div><div class="v">'+state.stage+'</div></div>'+
    '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div>'+
    '<div><div class="k">Items</div><div class="v">'+run.itemsTaken+'</div></div></div>'+inventoryHTML()+
-   '<button id="go">Redeploy as '+CH().name+'</button>'+
+   (run.kind==='meltdown'?scoreCodeHTML(encodeScoreCode({mode:MODE_IDS.meltdown,char:run.charIdx,seed:state.seed,score:state.score,detail:state.md.banked<<8})):'')+
+   '<button id="go">Redeploy as '+CH().name+(run.kind==='meltdown'?' &middot; Meltdown':'')+'</button>'+
    '<div class="btns"><button id="same" class="ghost">Replay this seed</button><button id="lob" class="ghost">Return to lobby</button></div>'+
    '<button id="menu" class="ghost">Main menu</button>');
-  hud.classList.remove('on');
-  $('go').onclick=()=>{ goRun(); enterPlay(); };
-  $('same').onclick=()=>{ goRun(state.seed); enterPlay(); };
+  hud.classList.remove('on'); bindCode();
+  $('go').onclick=()=>{ goRun(null,run.kind); enterPlay(); };
+  $('same').onclick=()=>{ goRun(state.seed,run.kind); enterPlay(); };
   $('lob').onclick=()=>{ goLobby(); enterPlay(); };
   $('menu').onclick=showMenu;
+}
+/* ---- Meltdown: extraction (the win screen), score code, trials list + result ---- */
+function scoreCodeHTML(code){ return '<div class="code"><span class="k">Score code</span><b id="scCode">'+code+'</b><button class="ghost" id="scCopy">Copy</button></div>'; }
+function bindCode(){ const b=$('scCopy'); if(!b)return; b.onclick=()=>{ const t=$('scCode').textContent; try{ navigator.clipboard.writeText(t); b.textContent='Copied'; }catch(e){ b.textContent=t; } SFX.ui(); }; }
+function showExtracted(sc,prev,code){
+  hud.classList.remove('on');
+  showScreen('<h1>Extracted <span style="color:var(--good)">&#10003;</span></h1>'+
+    '<div class="tag">'+CH().name+' reached the pad on '+stageMap(1).name+' &middot; '+(sc.total>prev?'new best':'best '+prev.toLocaleString())+' &middot; seed '+state.seed+'</div>'+
+    '<div class="stats"><div><div class="k">Score</div><div class="v">'+sc.total.toLocaleString()+'</div></div>'+
+    '<div><div class="k">Banked shards</div><div class="v">'+state.md.banked+' <small style="font-size:11px;color:var(--dim)">+'+sc.banked+'</small></div></div>'+
+    '<div><div class="k">Held shards</div><div class="v">'+state.md.held+' <small style="font-size:11px;color:var(--dim)">+'+sc.held+'</small></div></div>'+
+    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
+    '<div><div class="k">Time bonus</div><div class="v">'+sc.time+'</div></div>'+
+    '<div><div class="k">Items</div><div class="v">'+run.itemsTaken+(state.md.banked?' <small style="font-size:11px;color:var(--gold)">+1 banked</small>':'')+'</div></div></div>'+
+    inventoryHTML()+scoreCodeHTML(code)+
+    '<button id="go">Run it again &middot; Meltdown</button>'+
+    '<div class="btns"><button id="lob" class="ghost">Return to lobby</button><button id="menu" class="ghost">Main menu</button></div>');
+  bindCode();
+  $('go').onclick=()=>{ goRun(null,'meltdown'); enterPlay(); };
+  $('lob').onclick=()=>{ goLobby(); enterPlay(); };
+  $('menu').onclick=showMenu;
+}
+function showTrials(){
+  const marks=save.get('trials',{});
+  showScreen('<h1>Trials</h1><div class="tag">Six timed challenges &middot; restricted loadouts &middot; '+trialMarks()+' of '+TRIALS.length+' marks</div>'+
+    '<div class="trials">'+TRIALS.map(t=>'<button data-t="'+t.id+'" class="'+(marks[t.id]?'done':'')+'"><span>'+t.name+' <small>&middot; '+MAP_BY_ID[t.map].name+' &middot; '+t.time+' s'+(t.char?' &middot; '+CHARS.find(c=>c.id===t.char).name:'')+'</small></span><small>'+t.desc+'</small>'+(marks[t.id]?'<i>&#10003; mark earned</i>':'')+'</button>').join('')+'</div>'+
+    '<button class="ghost" id="back">Back</button>',true);
+  card.querySelectorAll('.trials button').forEach(b=>{ b.onclick=()=>{ goRun(null,'trial',b.dataset.t); enterPlay(); }; });
+  $('back').onclick=state.mode==='lobby'?showLobbyPanel:showMenu;
+}
+function showTrialEnd(ok,why){
+  const tr=state.trial, g=tr.def.goal; hud.classList.remove('on');
+  showScreen('<h1>'+(ok?'Trial <span style="color:var(--good)">complete</span>':'Trial <span style="color:var(--hot)">failed</span>')+'</h1>'+
+    '<div class="tag">'+tr.def.name+' &middot; '+(ok?'Trial Mark earned ('+trialMarks()+' / '+TRIALS.length+')':(why||'Time ran out'))+'</div>'+
+    '<div class="stats"><div><div class="k">Goal</div><div class="v">'+(g.n!==undefined?tr.prog+' / '+g.n:(ok?'Survived':'Fell'))+'</div></div>'+
+    '<div><div class="k">Time left</div><div class="v">'+Math.max(0,Math.ceil(tr.t))+' s</div></div>'+
+    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div></div>'+
+    '<button id="retry">'+(ok?'Run it again':'Retry')+'</button>'+
+    '<div class="btns"><button id="list" class="ghost">All trials</button><button id="lob" class="ghost">Return to lobby</button></div>');
+  $('retry').onclick=()=>{ goRun(null,'trial',tr.def.id); enterPlay(); };
+  $('list').onclick=showTrials;
+  $('lob').onclick=()=>{ goLobby(); enterPlay(); };
 }

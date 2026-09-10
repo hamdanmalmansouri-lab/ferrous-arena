@@ -1,0 +1,77 @@
+// v3.0 Phase 6 gate: a full Meltdown run reaches the extraction screen; the Director spends credits; Wardens at 25/55/85 %; shards
+// held vs banked (terminal), held-shard modifiers; score formula + score code round-trip + best persisted; a trial completes.
+const { chromium } = require('playwright');
+const path = require('path');
+(async () => {
+  const browser = await chromium.launch({ executablePath: require('./tools/pw-browser').chromiumPath(), args: ['--use-gl=swiftshader','--enable-unsafe-swiftshader','--no-sandbox'] });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
+  page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
+  await page.goto('file://' + path.resolve('test-local.html'));
+  await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
+  const simWait = async (secs) => { const t0 = await page.evaluate(() => __ARENA__.state.t); await page.waitForFunction(t => __ARENA__.state.t - t >= 0, t0 + secs, { timeout: 90000, polling: 100 }); };
+  let r;
+  r = await page.evaluate(() => ({ menuMelt: !!document.getElementById('goMelt'), menuTrials: !!document.getElementById('goTrials') }));
+  if (!r.menuMelt || !r.menuTrials) errors.push('MENU is missing the Meltdown / Trials buttons: ' + JSON.stringify(r));
+  await page.evaluate(() => { __ARENA__.forceStart('lobby'); });
+  await page.waitForTimeout(300);
+  r.lobbyPortal = await page.evaluate(() => __ARENA__.interactables.some(i => /Meltdown/.test(i.label)));
+  if (!r.lobbyPortal) errors.push('LOBBY has no Meltdown portal');
+  console.log('entry points:', JSON.stringify(r));
+
+  await page.evaluate(() => { const A = __ARENA__; A.selectChar(0); A.goRun(4242, 'meltdown'); A.state.running = true; A.state.forced = true; document.getElementById('hud').classList.add('on'); document.getElementById('screen').classList.add('hide'); A.player.hp = 9999; A.run.stats.maxHp = 9999; });
+  await page.waitForTimeout(300);
+  r = await page.evaluate(() => ({ kind: __ARENA__.run.kind, md: !!__ARENA__.state.md, term: !!(__ARENA__.state.md && __ARENA__.state.md.term), hudKind: document.getElementById('hud').dataset.kind, meltbar: getComputedStyle(document.getElementById('meltbar')).display }));
+  await page.evaluate(() => { __ARENA__.state.md.credits = 300; });
+  await simWait(3.0);
+  Object.assign(r, await page.evaluate(() => ({ enemies: __ARENA__.enemies.length, credits: +__ARENA__.state.md.credits.toFixed(1), elapsed: +__ARENA__.state.md.elapsed.toFixed(1), rate: +__ARENA__.MELTDOWN.creditRate(0).toFixed(1) })));
+  if (r.kind !== 'meltdown' || !r.md || !r.term || r.meltbar === 'none') errors.push('MELTDOWN did not start properly: ' + JSON.stringify(r));
+  if (r.enemies < 3) errors.push('DIRECTOR did not spend credits: ' + JSON.stringify(r));
+  console.log('director:', JSON.stringify(r));
+  await page.evaluate(() => { const A = __ARENA__; A.enemies.slice().forEach(e => A.removeEnemy(e)); A.state.md.elapsed = 0.26 * A.MELTDOWN.duration; });
+  await simWait(0.3);
+  r = await page.evaluate(() => ({ charge: +__ARENA__.state.md.charge.toFixed(2), wardens: __ARENA__.state.md.wardens, boss: !!__ARENA__.state.boss, name: document.getElementById('bossName').textContent }));
+  if (!r.wardens[0] || !r.boss) errors.push('WARDEN did not spawn at 25%: ' + JSON.stringify(r));
+  await page.evaluate(() => { const A = __ARENA__; A.killEnemy(A.state.boss); });
+  await page.waitForTimeout(100);
+  Object.assign(r, await page.evaluate(() => ({ held: __ARENA__.state.md.held, portal: __ARENA__.state.portalOpen, cores: __ARENA__.state.cores })));
+  if (r.held !== 1 || r.portal) errors.push('SHARD not held / portal opened in Meltdown: ' + JSON.stringify(r));
+  console.log('warden 25%:', JSON.stringify(r));
+  r = await page.evaluate(() => { const A = __ARENA__; A.state.offer = null; A.state.running = true; A.player.hp = 500; A.player.iframes = 0; A.player.shield = 0; A.hurtPlayer(100); return { taken: +(500 - A.player.hp).toFixed(1) }; });
+  if (Math.abs(r.taken - 112) > 0.5) errors.push('HELD SHARD enemy damage bonus wrong: ' + JSON.stringify(r));
+  await page.evaluate(() => { const A = __ARENA__; A.state.offer = null; A.state.running = true; A.enemies.slice().forEach(e => A.removeEnemy(e)); A.pickups.splice(0).forEach(p => p.g.parent && p.g.parent.remove(p.g)); A.player.pos.set(A.state.md.term.x, A.state.md.term.y, A.state.md.term.z + 1); });
+  await page.waitForTimeout(300);
+  await page.keyboard.press('e'); await page.waitForTimeout(150);
+  Object.assign(r, await page.evaluate(() => ({ held: __ARENA__.state.md.held, banked: __ARENA__.state.md.banked, hud: document.getElementById('uiBanked').textContent })));
+  if (r.held !== 0 || r.banked !== 1) errors.push('BANKING at the terminal failed: ' + JSON.stringify(r));
+  console.log('shards:', JSON.stringify(r));
+  await page.evaluate(() => { const A = __ARENA__; A.state.md.elapsed = A.MELTDOWN.duration - 0.2; A.state.md.wardens = [true, true, true]; A.state.md.credits = 500; A.player.hp = 9999; A.run.stats.maxHp = 9999; });
+  await simWait(1.5);
+  r = await page.evaluate(() => { const md = __ARENA__.state.md; return { charge: +md.charge.toFixed(2), pad: !!md.extract, dump: md.dump, window: +md.extractT.toFixed(1), enemies: __ARENA__.enemies.length, hudExtract: document.getElementById('uiExtract').textContent }; });
+  if (!r.pad || !r.dump) errors.push('EXTRACTION pad did not open at 100%: ' + JSON.stringify(r));
+  await page.evaluate(() => { const A = __ARENA__; A.state.md.held = 2; A.player.pos.copy(A.state.md.extract.pos); });
+  await page.waitForFunction(() => __ARENA__.state.won, null, { timeout: 30000 });
+  Object.assign(r, await page.evaluate(() => { const A = __ARENA__; const sc = A.meltdownScore(true); const code = document.getElementById('scCode') && document.getElementById('scCode').textContent; const dec = A.decodeScoreCode(code);
+    return { won: A.state.won, screen: document.getElementById('card').textContent.slice(0, 40), score: A.state.score, formula: sc, code, decoded: dec, best: JSON.parse(localStorage.getItem('fa2.meltdownBest')) }; }));
+  if (!r.won || !/Extracted/.test(r.screen)) errors.push('EXTRACTION win screen missing: ' + JSON.stringify(r));
+  if (r.score !== 1 * 1000 + 2 * 2500 + r.formula.kills + r.formula.time) errors.push('SCORE formula wrong: ' + JSON.stringify(r));
+  if (!r.decoded || r.decoded.score !== r.score || r.decoded.seed !== 4242 || r.decoded.mode !== 1) errors.push('SCORE CODE did not round-trip: ' + JSON.stringify(r));
+  if (!r.best || r.best.vanguard !== r.score) errors.push('BEST per operative not persisted: ' + JSON.stringify(r));
+  console.log('extraction:', JSON.stringify(r).slice(0, 600));
+  await page.screenshot({ path: 'shot-extracted.png' });
+
+  await page.evaluate(() => { const A = __ARENA__; A.goRun(7, 'trial', 'sprint'); A.state.running = true; document.getElementById('hud').classList.add('on'); document.getElementById('screen').classList.add('hide'); A.player.hp = 9999; A.run.stats.maxHp = 9999; });
+  await page.waitForTimeout(300);
+  r = await page.evaluate(() => ({ kind: __ARENA__.run.kind, char: __ARENA__.CHARS[__ARENA__.run.charIdx].id, map: __ARENA__.state.mapId, trialbar: getComputedStyle(document.getElementById('trialbar')).display, items: Object.keys(__ARENA__.run.items).length }));
+  await simWait(2.0);
+  r.spawned = await page.evaluate(() => __ARENA__.enemies.length);
+  await page.evaluate(() => { const A = __ARENA__; for (let k = 0; k < 20; k++) { const e = A.makeEnemy('chaser', 3); e.group.position.set(20, 0, 20); A.killEnemy(e); } });
+  await page.waitForTimeout(300);   // the goal completes the trial and stops the simulation
+  Object.assign(r, await page.evaluate(() => ({ prog: __ARENA__.state.trial.prog, done: __ARENA__.state.trial.done, failed: __ARENA__.state.trial.failed, card: document.getElementById('card').textContent.slice(0, 30), marks: JSON.parse(localStorage.getItem('fa2.trials') || '{}') })));
+  if (r.kind !== 'trial' || r.char !== 'vanguard' || r.map !== 'foundry' || r.trialbar === 'none' || r.items !== 0) errors.push('TRIAL did not start with its loadout: ' + JSON.stringify(r));
+  if (!r.done || r.failed || !r.marks.sprint) errors.push('TRIAL did not complete / persist a mark: ' + JSON.stringify(r));
+  console.log('trial:', JSON.stringify(r));
+  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
+  await browser.close();
+})();

@@ -6,7 +6,7 @@ const MAT_SHOOT =new THREE.MeshStandardMaterial({color:0x8e44ad,roughness:.55,me
 const MAT_BOSS  =new THREE.MeshStandardMaterial({color:0xd98a2b,roughness:.45,metalness:.6});
 const MAT_DUMMY =new THREE.MeshStandardMaterial({color:0x5c6b7a,roughness:.7,metalness:.3});
 const MAT_METAL =new THREE.MeshStandardMaterial({color:0x1c222b,roughness:.65,metalness:.6});
-const ENEMY_NAME={chaser:'Rusher',shooter:'Lancer',boss:'Warden',dummy:'Dummy'};
+const ENEMY_NAME={chaser:'Rusher',shooter:'Lancer',boss:'Warden',dummy:'Dummy',elite:'Elite'};
 
 const MAT_HIDDEN=new THREE.MeshBasicMaterial({visible:false,side:THREE.DoubleSide});   // double-sided so a shot cast from inside a hit box still registers
 const BASIC_CACHE={};
@@ -27,15 +27,17 @@ const ENEMY_TINT={chaser:0xd8352a,shooter:0xc06cff,boss:0xffb52e,dummy:0x6b7b8c}
 const HOVER_Y={shooter:1.25};                       // the Lancer drone floats
 const FLINCH_BONES=['Chest','Torso','Root','Body'];
 const corpses=[];
-function makeEnemy(type,wave){
-  const g=new THREE.Group();
+function makeEnemy(type,wave,opts){
+  const g=new THREE.Group(); const elite=!!(opts&&opts.elite);
   let animator=null, bones=null, model=null, modelScale=1;
   if(MODELS.ok&&MODELS.items[ENEMY_MODEL[type]]){
-    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); addRim(c.group,ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
+    const c=spawnCharacter(ENEMY_MODEL[type],elite?0xffd166:ENEMY_TINT[type]); addRim(c.group,elite?0xffe08a:ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
     if(HOVER_Y[type])c.group.position.y=HOVER_Y[type];
     bones.flinch=null; for(const b of FLINCH_BONES)if(bones[b]){ bones.flinch=bones[b]; break; }
   } else buildEnemyProcedural(g,type);
-  return finishEnemy(g,type,wave,animator,bones,model,modelScale);
+  const e=finishEnemy(g,type,wave,animator,bones,model,modelScale);
+  if(elite){ e.elite=true; e.hp*=3; e.maxHp=e.hp; e.speed*=1.3; e.size=1.25; g.scale.setScalar(1.25); if(e.model)e.model.traverse(o=>{ if(o.isMesh&&o.material.emissive&&!o.userData.rim)o.material.emissiveIntensity=1.2; }); }   // Elite: 3x HP, faster, bigger, brighter
+  return e;
 }
 function buildEnemyProcedural(g,type){
   const mat=type==='shooter'?MAT_SHOOT:type==='boss'?MAT_BOSS:type==='dummy'?MAT_DUMMY:MAT_CHASER;

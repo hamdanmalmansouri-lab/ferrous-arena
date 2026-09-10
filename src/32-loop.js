@@ -270,7 +270,9 @@ function update(dt){
   /* ---- waves ---- */
   if(mode==='run'){
     state.waveT+=dt;
-    if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(state.wave+1); spawnTimer=0.5; } }
+    if(run.kind==='meltdown')meltdownTick(dt);
+    else if(run.kind==='trial')trialTick(dt);
+    else if(state.startDelay>0){ state.startDelay-=dt; if(state.startDelay<=0){ startWave(state.wave+1); spawnTimer=0.5; } }
     else if(state.spawnQueue>0){
       spawnTimer-=dt;
       if(spawnTimer<=0&&enemies.length<16){ spawnOne(); spawnTimer=0.35; syncHUD(); }
@@ -323,7 +325,7 @@ function update(dt){
     p.t-=dt;
     if(p.g.position.distanceTo(player.pos.clone().setY(p.g.position.y))<1.35){
       if(p.kind==='heal'){ player.hp=Math.min(s.maxHp,player.hp+Math.round(s.maxHp*.28)); SFX.pick(); say('Repair kit <b>+'+Math.round(s.maxHp*.28)+'</b>'); }
-      else queueOffer(p.items||1);   // every item is the player's pick, never an auto-roll
+      else if(run.kind!=='trial')queueOffer(p.items||1);   // every item is the player's pick, never an auto-roll (trials carry no items)
       scene.remove(p.g); pickups.splice(i,1); syncHUD(); continue;
     }
     if(p.t<=0){ scene.remove(p.g); pickups.splice(i,1); }

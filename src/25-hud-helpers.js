@@ -18,6 +18,9 @@ function syncItems(){
 }
 function syncHUD(){
   const s=run.stats;
+  if(state.md){ const md=state.md; uiCharge.textContent=Math.floor(md.charge*100)+'%'; chargeFill.style.width=(md.charge*100)+'%'; uiHeld.textContent=md.held; uiBanked.textContent=md.banked;
+    uiExtract.textContent=md.extract?'\u00b7 extraction '+Math.ceil(md.extractT)+' s':md.closed?'\u00b7 window closed':''; }
+  if(state.trial){ const tr=state.trial, g=tr.def.goal; uiTrialName.textContent=tr.def.name; uiTrialGoal.textContent=g.n!==undefined?tr.prog+' / '+g.n:'Survive'; const t=Math.max(0,Math.ceil(tr.t)); uiTrialTime.textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0'); }
   uiWave.textContent=Math.max(1,state.wave);
   uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue>0?' +'+state.spawnQueue:''; uiScrap.textContent=state.scrap;
   const nb=state.wave>0?(BOSS_EVERY-(state.wave%BOSS_EVERY))%BOSS_EVERY:BOSS_EVERY;
@@ -66,5 +69,7 @@ function syncCompass(){
   if(state.boss&&!state.boss.dead)mark(state.boss.group.position.x,state.boss.group.position.z,'boss','&#9650;');
   if(state.portalOpen&&state.portal)mark(state.portal.position.x,state.portal.position.z,'portal','&#9679;');
   if(state.fab)mark(state.fab.pos.x,state.fab.pos.z,'fab','&#9635;');
+  if(state.md&&state.md.term)mark(state.md.term.x,state.md.term.z,'term','&#9671;');
+  if(state.md&&state.md.extract)mark(state.md.extract.pos.x,state.md.extract.pos.z,'extract','&#9650;');
   compassEl.innerHTML=html;
 }

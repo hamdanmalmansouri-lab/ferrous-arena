@@ -117,7 +117,7 @@ function explodeBarrel(b){
   if(state.mode==='run'&&dp<3.4)hurtPlayer(Math.round(16+state.wave*0.5));
   const dmg=70+state.wave*4; let n=0;
   for(const e of enemies.slice()){ if(e.dead)continue; const d=Math.hypot(e.group.position.x-b.x,e.group.position.z-b.z); const R=4.8*e.size;
-    if(d<R){ dealDamage(e,dmg*(1-0.6*d/R),e.group.position.clone().setY(1),false,false); n++; } }
+    if(d<R){ state.barrelKill=true; dealDamage(e,dmg*(1-0.6*d/R),e.group.position.clone().setY(1),false,false); state.barrelKill=false; n++; } }
   if(n)say('Barrel took out <b>'+n+'</b>','item');
   for(const o of barrels)if(!o.dead&&Math.hypot(o.x-b.x,o.z-b.z)<3.6)explodeBarrel(o);   // chain reaction
 }
@@ -245,6 +245,7 @@ function buildLobby(){
   /* portals */
   addPortal(-11,3,0x3ddc84,'Shooting Range',()=>goRange());
   addPortal( 11,3,0x4ea8ff,'Deploy',()=>goRun());
+  addPortal(0,12.5,0xff6ad5,'Meltdown Protocol',()=>goRun(null,'meltdown'));
   /* set dressing: lockers and shelves along the side walls, a desk by the range portal, crates by the deploy portal */
   if(MODELS.ok){ for(let i=0;i<4;i++){ addProp('locker',-15,-8+i*1.1,90,2.3,true); addProp('locker',15,-8+i*1.1,-90,2.3,true); }
     addProp('shelves',-14.9,4,90,2.3,true); addProp('desk',-11,-4,0,.9,true); addProp('crate_large',12,-6,90,1.4,true); addProp('crate_tarp',13,10,20,1.5,true); addProp('crate_tarp',-8,12.5,160,1.4,true); addProp('barrel2',9,12.5,0,.8,true); addProp('barrel2',10,13.4,40,.8,true); }
