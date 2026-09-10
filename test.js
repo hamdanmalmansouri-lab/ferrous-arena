@@ -78,7 +78,7 @@ const path = require('path');
   await page.screenshot({ path: 'shot-boss.png' });
   // kill boss -> loot
   r = await page.evaluate(() => { const b = __ARENA__.state.boss; const before = __ARENA__.pickups.length; b.hp = 0; /* trigger via dealDamage path */ return before; });
-  await page.evaluate(() => { const b = __ARENA__.enemies.find(e => e.type === 'boss'); __ARENA__.enemies.forEach(e => { if (e !== b) { e.speed = 0; e.cd = 999; e.group.position.set(30, 0, 30); } }); if (b) { b.speed = 0; b.charge = 0; b.cd2 = 999; b.hp = 40; const p = __ARENA__.player; p.pos.copy(b.group.position).add(new THREE.Vector3(-0.72, 0, 5)); p.yaw = 0; p.pitch = 0.05; p.vel.set(0,0,0); } });
+  await page.evaluate(() => { const b = __ARENA__.enemies.find(e => e.type === 'boss'); __ARENA__.enemies.forEach(e => { if (e !== b) { e.speed = 0; e.cd = 999; e.group.position.set(30, 0, 30); } }); if (b) { b.speed = 0; b.charge = 0; b.cd2 = 999; b.hp = 40; const p = __ARENA__.player; p.pos.copy(b.group.position).add(new THREE.Vector3(-1.05, 0, 5)); p.yaw = 0; p.pitch = 0.05; p.vel.set(0,0,0); } });
   await page.waitForTimeout(200);
   await page.evaluate(() => { __ARENA__.keys.mouse = true; });
   await page.waitForTimeout(2500);

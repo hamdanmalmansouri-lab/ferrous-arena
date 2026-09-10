@@ -10,6 +10,7 @@ const path = require('path'), fs = require('fs'), http = require('http');
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE ' + m.text()); });
   await page.goto('file://' + path.resolve('test-local.html'));
   await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
+  const clearField = () => page.evaluate(() => { const A = __ARENA__; A.enemies.slice().forEach(e => A.killEnemy(e)); A.pickups.splice(0).forEach(p => p.g.parent && p.g.parent.remove(p.g)); A.state.offer = null; A.state.over = false; A.state.running = true; });
   const simWait = async (secs) => { const t0 = await page.evaluate(() => __ARENA__.state.t); await page.waitForFunction(t => __ARENA__.state.t - t >= 0, t0 + secs, { timeout: 60000, polling: 100 }); };
   let r;
 
@@ -18,7 +19,7 @@ const path = require('path'), fs = require('fs'), http = require('http');
   await page.waitForTimeout(300);
   r = await page.evaluate(() => { const A = __ARENA__, p = A.player;
     p.pos.set(17.5, 0, 0); p.yaw = Math.PI / 2; p.pitch = -0.12; p.orbit = 0; p.vel.set(0, 0, 0);   // facing -x, the 1.4 m Foundry wall at x=20 is behind
-    const e = A.makeEnemy('chaser', 1); e.group.position.set(12, 0, -0.72); e.speed = 0; e.cd = 999; e.spawnT = 0; e.group.scale.setScalar(1);
+    const e = A.makeEnemy('chaser', 1); e.group.position.set(12, 0, -1.05); e.speed = 0; e.cd = 999; e.spawnT = 0; e.group.scale.setScalar(1);
     return { hp0: e.hp }; });
   await page.waitForTimeout(300);
   r.cam = await page.evaluate(() => __ARENA__.camera.position.toArray().map(v => +v.toFixed(2)));
@@ -31,10 +32,11 @@ const path = require('path'), fs = require('fs'), http = require('http');
   await page.screenshot({ path: 'shot-backwall.png' });
 
   // enemy behind the player (between the camera and the operative) must not eat a forward shot
-  r = await page.evaluate(() => { const A = __ARENA__, p = A.player; A.enemies.slice().forEach(e => A.killEnemy(e)); A.state.kills = 0;
-    p.pos.set(10, 0, 10); p.yaw = 0; p.pitch = 0.02; p.orbit = 0; p.vel.set(0, 0, 0);   // x=10 lane: no Foundry cover between z=12 and z=3
-    const back = A.makeEnemy('chaser', 1); back.group.position.set(10.72, 0, 12.4); back.speed = 0; back.cd = 999; back.spawnT = 0; back.group.scale.setScalar(1);   // 2.4 m behind, on the camera line
-    const front = A.makeEnemy('chaser', 1); front.group.position.set(10.72, 0, 3); front.speed = 0; front.cd = 999; front.spawnT = 0; front.group.scale.setScalar(1);
+  await clearField();
+  r = await page.evaluate(() => { const A = __ARENA__, p = A.player; A.state.kills = 0;
+    p.pos.set(10, 0, 10); p.yaw = 0; p.pitch = -0.02; p.orbit = 0; p.vel.set(0, 0, 0);   // x=10 lane: no Foundry cover between z=12 and z=3
+    const back = A.makeEnemy('chaser', 1); back.group.position.set(11.05, 0, 12.4); back.speed = 0; back.cd = 999; back.spawnT = 0; back.group.scale.setScalar(1);   // 2.4 m behind, on the camera line
+    const front = A.makeEnemy('chaser', 1); front.group.position.set(11.05, 0, 3); front.speed = 0; front.cd = 999; front.spawnT = 0; front.group.scale.setScalar(1);
     return { backHp: back.hp, frontHp: front.hp }; });
   await page.waitForTimeout(300);
   await page.evaluate(() => { __ARENA__.keys.mouse = true; });
@@ -46,7 +48,8 @@ const path = require('path'), fs = require('fs'), http = require('http');
   console.log('behind vs front:', JSON.stringify(r));
 
   // ---- 2. three Rushers in melee: a full-health Vanguard must survive more than 4 s; a 4th Rusher gets no token and orbits ----
-  r = await page.evaluate(() => { const A = __ARENA__, p = A.player; A.enemies.slice().forEach(e => A.killEnemy(e));
+  await clearField();
+  r = await page.evaluate(() => { const A = __ARENA__, p = A.player;
     A.selectChar(0); A.player.hp = A.run.stats.maxHp; A.state.wave = 1; p.pos.set(0, 0, 10); p.vel.set(0, 0, 0);
     for (let k = 0; k < 4; k++) { const a = k / 4 * Math.PI * 2; const e = A.makeEnemy('chaser', 1); e.group.position.set(p.pos.x + Math.cos(a) * 1.5, 0, p.pos.z + Math.sin(a) * 1.5); e.spawnT = 0; e.group.scale.setScalar(1); e.cd = 0; }
     return { hp0: A.player.hp, t0: A.state.t }; });
@@ -57,7 +60,7 @@ const path = require('path'), fs = require('fs'), http = require('http');
   if (r.tokens > 3) errors.push('MELEE TOKENS exceeded 3: ' + JSON.stringify(r));
   console.log('rusher gate:', JSON.stringify(r));
   await page.screenshot({ path: 'shot-rushers.png' });
-  await page.evaluate(() => { const A = __ARENA__; A.enemies.slice().forEach(e => A.killEnemy(e)); A.player.hp = A.run.stats.maxHp; A.state.over = false; A.state.running = true; });
+  await clearField(); await page.evaluate(() => { __ARENA__.player.hp = __ARENA__.run.stats.maxHp; });
 
   // ---- 3. omnidirectional sprint at 0.8x ----
   await page.evaluate(() => { const A = __ARENA__, p = A.player; p.pos.set(0, 0, 0); p.yaw = 0; p.vel.set(0, 0, 0); A.keys.shift = true; A.keys.a = true; });

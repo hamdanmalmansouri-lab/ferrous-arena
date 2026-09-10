@@ -100,11 +100,12 @@ function update(dt){
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
 
   /* ---- camera ---- */
-  const camF=forwardInto(_camF,camYaw(),player.pitch+player.recoil);
+  player.lead+=((-inp.r*CAM.lead)-player.lead)*Math.min(1,dt*4);   // small yaw lead toward the direction of travel (camera only)
+  const camF=forwardInto(_camF,camYaw()+player.lead,player.pitch+player.recoil);
   const camR=_camR.crossVectors(camF,UP).normalize();
-  const pivot=_pivot.copy(player.pos); pivot.y+=EYE; pivot.addScaledVector(camR,0.72+0.16*player.aimK);
-  let dist=5.15-1.95*player.aimK;
-  const fov=66-16*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
+  const pivot=_pivot.copy(player.pos); pivot.y+=EYE+CAM.pivotY; pivot.addScaledVector(camR,CAM.shoulder+0.16*player.aimK);
+  let dist=CAM.dist-1.5*player.aimK;
+  const fov=66-CAM.aimFov*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
   crossEl.classList.toggle('free',player.orbit!==0);
   const camHit=rayWorld(pivot,_v1.copy(camF).negate(),dist+0.4,0);   // slab test against boxes[] (no mesh raycast per step)
   if(camHit>=0)dist=Math.max(1.1,camHit-0.35);

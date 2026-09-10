@@ -43,10 +43,15 @@ function spawnCharacter(id,tint){
   const bones={};
   inst.traverse(o=>{ if(o.isBone||o.type==='Bone')bones[o.name]=o; if(o.isMesh){ o.material=o.material.clone(); o.castShadow=true;
     if(tint!==undefined){ if(rec.textured){ o.material.emissive.set(tint); o.material.emissiveIntensity=1.6; o.material.color.set(tint).lerp(new THREE.Color(0xffffff),0.55); }   // coloured cast on the dark metal + glow
-      else if(o.material.name==='Main')o.material.color.set(tint); } } });
+      else if(o.material.name==='Main')o.material.color.set(tint); }
+    if(!rec.textured)charBoost(o.material,tint!==undefined?CHAR_BOOST.enemy:CHAR_BOOST.k); } });
   const animator=makeAnimator(inst,rec.animations);
   return {group:inst,animator:animator,bones:bones,scale:s,height:rec.height||CHAR_HEIGHT};
 }
+/* value ladder: flat-coloured characters get a self-light (emissive = albedo x CHAR_BOOST) so they sit above the world in the
+   ladder — the floor reads ~10 % on screen, operatives and enemies ~45-60 % — independent of how dark a map is lit */
+const CHAR_BOOST={k:1.64,enemy:0.5};   // k solved by the calibration pass (Vanguard torso ~0.52 sRGB on Foundry); enemies carry a saturated tint, so less
+function charBoost(m,k){ if(!m.emissive)return; m.emissive.copy(m.color); m.emissiveIntensity=k===undefined?CHAR_BOOST.k:k; }
 /* a static prop (weapon, crate, target) */
 function spawnProp(id,tint){
   const rec=MODELS.items[id]; if(!rec)return null;
@@ -113,4 +118,28 @@ function makeAnimator(root,clips){
     update:function(dt){ mixer.update(dt); }
   };
   return A;
+}
+/* ---- rim pass: an inflated back-face shell in additive blend, so every character carries a coloured edge light that
+   separates it from the floor. Skinned meshes: the shell is made by scaling the bind matrix (the clone's own transform
+   cancels out in 'attached' bind mode), so it follows the animation exactly; plain meshes get a scaled sibling. Off on the
+   low tier (applyQuality toggles `userData.rim` visibility). ---- */
+const RIM_SCALE=1.03, _rimM=new THREE.Matrix4();
+function geoCentre(geo){
+  if(geo.userData.centre)return geo.userData.centre;
+  const P=geo.attributes.position; let mn=[Infinity,Infinity,Infinity], mx=[-Infinity,-Infinity,-Infinity];
+  for(let i=0;i<P.count;i++)for(let k=0;k<3;k++){ const v=attrAt(P,i,k); if(v<mn[k])mn[k]=v; if(v>mx[k])mx[k]=v; }
+  return geo.userData.centre=new THREE.Vector3((mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2);
+}
+function addRim(group,color){
+  const mk=sk=>new THREE.MeshBasicMaterial({color:color,side:THREE.BackSide,transparent:true,opacity:0.35,blending:THREE.AdditiveBlending,depthWrite:false,skinning:sk});   // r128: skinning is a material flag
+  const matS=mk(true), matM=mk(false);
+  const list=[]; group.traverse(o=>{ if(o.isMesh&&!o.userData.rim&&o.material!==MAT_HIDDEN&&o.geometry.attributes.position)list.push(o); });
+  for(const o of list){
+    const c=geoCentre(o.geometry);
+    const r=o.clone(); r.material=o.isSkinnedMesh?matS:matM; r.userData.rim=true; r.castShadow=false; r.receiveShadow=false; r.frustumCulled=false; r.renderOrder=1; r.visible=Q.tier!=='low';
+    _rimM.makeTranslation(c.x,c.y,c.z).multiply(new THREE.Matrix4().makeScale(RIM_SCALE,RIM_SCALE,RIM_SCALE)).multiply(new THREE.Matrix4().makeTranslation(-c.x,-c.y,-c.z));
+    if(o.isSkinnedMesh){ r.bindMatrix.multiply(_rimM); o.parent.add(r); }
+    else { const w=new THREE.Object3D(); w.userData.rim=true; w.matrixAutoUpdate=false; w.matrix.copy(o.matrix).multiply(_rimM).multiply(new THREE.Matrix4().copy(o.matrix).invert()); w.matrixAutoUpdate=false; w.add(r); o.parent.add(w); }
+  }
+  return group;
 }

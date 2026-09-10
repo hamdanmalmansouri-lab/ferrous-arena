@@ -61,3 +61,14 @@ function lineOfSight(from,to){
   const dir=_los.copy(to).sub(from); const dist=dir.length(); if(dist<1e-4)return true; dir.multiplyScalar(1/dist);
   return rayWorld(from,dir,dist,0)<0;
 }
+/* value-ladder probes for look.js: a floor point beside the player, the near face of the nearest cover block ahead, the nearest wall face */
+function calPoints(){
+  const p=player.pos, fwd=forwardVec(player.yaw,0); fwd.y=0; fwd.normalize();
+  const floor=p.clone().addScaledVector(fwd,3.2); floor.x+=1.4; floor.y=0.02;
+  let cover=null,cd=1e9,wall=null,wd=1e9;
+  for(const b of boxes){ const h=b.max.y-b.min.y; const c=new THREE.Vector3((b.min.x+b.max.x)/2,0,(b.min.z+b.max.z)/2); const d=c.sub(p); const dist=d.length(); if(dist<1e-3||d.dot(fwd)<dist*0.35)continue;
+    if(h>=1.5&&h<5.5&&dist<24&&dist<cd){ cd=dist; cover=b; } if(h>=5.5&&d.dot(fwd)>dist*0.8&&dist<wd){ wd=dist; wall=b; } }   // the wall ahead, not the one beside
+  const right=new THREE.Vector3().crossVectors(fwd,UP).normalize();
+  const face=(b,y,side)=>{ if(!b)return null; const q=p.clone().addScaledVector(right,side); q.y=Math.min(b.max.y-0.3,b.min.y+y); q.x=Math.max(b.min.x+0.05,Math.min(b.max.x-0.05,q.x)); q.z=Math.max(b.min.z+0.05,Math.min(b.max.z-0.05,q.z)); q.addScaledVector(q.clone().sub(p).setY(0).normalize(),-0.03); return q; };
+  return {floor:floor,cover:face(cover,1.2,0.7),wall:face(wall,3.2,0)};   // cover sampled beside the operative's shadow, wall above the cover line
+}

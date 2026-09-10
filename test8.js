@@ -95,10 +95,10 @@ const path = require('path');
   console.log('wave break:', JSON.stringify(r));
 
   // ---- live check at wave 25: expected items, a wave-25 Rusher in front dies within a few seconds of fire ----
-  await page.evaluate(() => { const A = __ARENA__; A.state.offer = null; A.state.running = true; A.state.startDelay = 999; A.state.spawnQueue = 0; A.state.waveBreak = 0; A.enemies.slice().forEach(e => A.killEnemy(e)); A.pickups.length = 0;
+  await page.evaluate(() => { const A = __ARENA__; A.state.offer = null; A.state.running = true; A.state.startDelay = 999; A.state.spawnQueue = 0; A.state.waveBreak = 0; A.enemies.slice().forEach(e => A.killEnemy(e)); A.pickups.splice(0).forEach(p => p.g.parent && p.g.parent.remove(p.g)); A.state.offer = null; A.state.running = true;
     A.state.wave = 25; A.run.items = { rounds: 12, syringe: 8, plating: 8, extmag: 4, lens: 4 }; A.computeStats(); A.player.hp = A.run.stats.maxHp; A.player.mag = A.run.stats.mag;
-    const p = A.player; p.pos.set(10, 0, 10); p.yaw = 0; p.pitch = 0.02; p.orbit = 0; p.vel.set(0, 0, 0);
-    const e = A.makeEnemy('chaser', 25); e.group.position.set(10.72, 0, 3); e.speed = 0; e.cd = 999; e.spawnT = 0; e.group.scale.setScalar(1); });
+    const p = A.player; p.pos.set(10, 0, 10); p.yaw = 0; p.pitch = -0.02; p.orbit = 0; p.vel.set(0, 0, 0);
+    const e = A.makeEnemy('chaser', 25); e.group.position.set(11.05, 0, 3); e.speed = 0; e.cd = 999; e.spawnT = 0; e.group.scale.setScalar(1); });
   await page.waitForTimeout(300);
   const t0 = await page.evaluate(() => { __ARENA__.keys.mouse = true; return __ARENA__.state.t; });
   await page.waitForFunction(t => __ARENA__.enemies.length === 0 || __ARENA__.state.t - t > 6, t0, { timeout: 60000, polling: 100 });

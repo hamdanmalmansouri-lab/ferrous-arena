@@ -1,6 +1,6 @@
 # Ferrous Arena — Project Handoff
 
-**Status:** v3.0.0-p2 — the v3.0 "Meltdown" pass is in progress (phases 1 correctness + 2 roguelite loop shipped; phases 2–7 in `MASTER-ROADMAP.md` V3 table). Base: playable v2.8 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
+**Status:** v3.0.0-p3 — the v3.0 "Meltdown" pass is in progress (phases 1 correctness, 2 roguelite loop, 3 art foundation shipped; phases 2–7 in `MASTER-ROADMAP.md` V3 table). Base: playable v2.8 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
 Quaternius modular-human operatives + Sci-Fi Guns, mech/kit enemies, layered skeletal animation with strafes, roll, hit reactions + procedural recoil/flinch/shake, settings screen), verified error-free in headless Chromium (six suites). Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
 **Deliverables:** `ferrous-arena.html` (standalone, open and play) and `docs/` (GitHub Pages PWA for phones).
 **Live copy:** published as a private Claude artifact (same URL since v1).
@@ -181,15 +181,15 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | File | Contents |
 |---|---|
 | `00-prelude` | THREE presence check |
-| `05-gltfloader`, `06-assets`, `07-models` | inlined GLTFLoader + SkeletonUtils; packed `ASSET_DATA`; `loadModels`, `spawnCharacter`, `spawnProp`, `splitClip`, `makeAnimator` (`play` / `layer` / `finished`) |
+| `05-gltfloader`, `06-assets`, `07-models` | inlined GLTFLoader + SkeletonUtils; packed `ASSET_DATA`; `loadModels`, `spawnCharacter` (+ `charBoost` self-light on flat models), `spawnProp`, **`addRim(group,color)`**, `splitClip`, `makeAnimator` (`play` / `layer` / `finished`) |
 | `11-constants`, `12-data-characters`, `13-data-items` | tuning constants, `MELEE_TOKENS`, **`timers[]` + `after(t,fn)` + `tickTimers(dt)`** (every gameplay delay goes through these, never `setTimeout`), `CHARS[]` (abilities carry a `short` touch label), `ITEMS[]` |
 | `14-dom`, `15-persistence` | cached element handles (HUD + touch layer); `save.get/set` (localStorage `fa2.*`, try/catch) |
 | `16-audio` | `blip`, `noise`, `SFX`, single `master` GainNode |
 | `17-quality-tiers` | `TIERS` (high/medium/low: pixel ratio, shadows, fx density, fog, stars, AA), `detectTier()`, `IS_COARSE`, `Q` |
-| `18-renderer-scene` | renderer, lights, sky; `applyQuality(tier)`, `setQuality('auto'|tier)` |
-| `19-world` | `mergeGeos()`, `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits one mesh per material **and calls `navBuild()`**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildLobby/buildRange`, `addTarget`, `podDisplays[]`, `updatePodRings(emote)`, `tickPods` |
-| `19b-maps` | `mapData`, `buildFoundry/buildRelay/buildFrost/buildReactor`, `MAPS[]`, `MODS[]`, `mulberry32`, `makeRunOrder(seed)`, `stageMap()`, `stageMod()` |
-| `20-player` | `player` (incl. `kick`, `flinch`), `run`, `computeStats()`, `GUN_MOUNT`, `buildAvatarModel(ch)` (glTF or `buildAvatarProcedural`; sets `gun.userData.kick`), `rebuildAvatar()` (`avatarAnim`, `avatarBones`) |
+| `18-renderer-scene` | renderer, the light rig (`hemi`, `sun`, `rim`), `RIG_DEFAULT` + **`applyRig(rig)`**; `applyQuality(tier)` (also toggles `userData.rim` shells), `setQuality('auto'|tier)` |
+| `19-world` | **`buildSky(stops,starCount,silhouette,silColor)` + `buildSilhouette(kind,color)`** (dome + stars + one band, in `world`, disposed by `clearWorld`), `mergeGeos()`, `stdMat()` cache, `addBlock()` queues boxes → `finalizeWorld()` emits one mesh per material **and calls `navBuild()`**; `addFloor/addWalls/makeLabel/addPortal/clearWorld`; `buildLobby/buildRange`, `addTarget`, `podDisplays[]`, `updatePodRings(emote)`, `tickPods` |
+| `19b-maps` | `setTheme(rig)`, **`RIGS`** (per-map light rigs), **`LADDER`** (calibrated surface albedos per map), **`SKIES`** (gradient stops), `mapData`, `buildFoundry/buildRelay/buildFrost/buildReactor`, `MAPS[]`, `MODS[]`, `mulberry32`, `makeRunOrder(seed)`, `stageMap()`, `stageMod()` |
+| `20-player` | `player` (incl. `kick`, `flinch`, `lead`), `run`, `computeStats()`, `GUN_MOUNT`, **`MOUNTS`** (per-operative `pos/rot/back/up`), **`applyVanguardPalette`**, `buildAvatarModel(ch)` (+ `addRim`) (glTF or `buildAvatarProcedural`; sets `gun.userData.kick`), `rebuildAvatar()` (`avatarAnim`, `avatarBones`) |
 | `21-enemies` | `ENEMY_MODEL/ENEMY_TINT`, `corpses[]`, `makeEnemy` (glTF or `buildEnemyProcedural`) → `finishEnemy` (hit boxes, stats, `animator`, `attackT/shootT`), `removeEnemy(e,keepCorpse)`, `spawnDummy` |
 | `21b-nav` | `navBuild`, `navCell/navHeightAt/navOpenAt/navCentre/navNearestOpen`, `navPath` (A*), `navClear` (Bresenham), `navSteer(e,target,out,dt)` |
 | `22-effects` | **pools**: `TRACER_POOL` (48, geometry rewritten in place), `SPARK_POOL` (240, fade by scale, count × `Q.cfg.fx`), `PROJ_POOL` (160, no lights — `glowSprite()`), `dropPickup` |
@@ -219,8 +219,13 @@ between the gun and the target still does. Hit boxes are double-sided (`MAT_HIDD
 `player.yaw/pitch` directly. `#touch` sits above the canvas, is hidden whenever `#screen` is visible, and only shows when `TOUCH`.
 `@media (pointer:coarse)` re-lays the HUD (vitals/ammo top, ability panel replaced by the touch button, safe-area insets).
 
-**No dynamic lights.** three.js recompiles every material's shader whenever the number of lights changes. Lights are static per
-map (portal/pod lights in the lobby, muzzle flash on the avatar); everything transient glows with an additive sprite.
+**No dynamic lights.** three.js recompiles every material's shader whenever the number of lights changes. The rig is three fixed lights
+(`sun`, `rim`, `hemi`) whose colours / directions / intensities are swapped per map by `applyRig`; portal/pod lights in the lobby and the
+muzzle flash are the only others. Everything transient glows with an additive sprite.
+
+**Value ladder.** Surface colours are screen targets, not albedos: floor ≈ 10 %, cover ≈ 21 %, walls ≈ 32 % sRGB luminance from the
+gameplay camera, operatives ≈ 45–55 % (flat-coloured characters add emissive = albedo × `CHAR_BOOST`). `LADDER[map]` was solved by
+rendering and measuring (`calPoints()` gives the probe points; `look.js` prints the readout). Change a rig and the ladder needs re-solving.
 
 ---
 
@@ -235,7 +240,8 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 - Models: per-model `height` in the packer `PICK`, `GUN_MOUNT` (scale 0.5) / `MOUNTS`, `GUN_AXIS` fallback, `player.aimT` 2.5 s / `hitT` 0.45 s / `rollT` 0.5 s / `landT` 0.55 s, jump-start window 0.32 s, `ENEMY_TINT`, `HOVER_Y`, emissive intensity 1.6 / colour cast 0.55 in `spawnCharacter`, clip `timeScale` formulas in the loop.
 - Feel: kick per shot in `tryFire` (0.6 / 0.85 / 1 by operative), decay `dt*7`; flinch decay `dt*8`, torso flinch gain 0.35 (player) / 3 (enemies, from `e.hurt`); shake amplitudes at each `shakeCam` call, decay `dt*3`, camera offset 0.14 / 0.10 m; LOD distance 25 m (14 m low), 15 Hz; head-look clamp ±0.9 rad in `tickPods`.
 - Quality: `TIERS` table; probe thresholds in `frame()`.
-- Camera/FOV: `dist=5.15`, offset `0.72`, FOV 66.
+- Camera/FOV: `CAM` in `11-constants` — shoulder 1.05, dist 4.4 (2.9 aiming), pivot EYE+0.15, FOV 66 (56 aiming), yaw lead 4°.
+- Look: `RIGS[map]` (sun/rim/hemi/exposure/fog), `SKIES[map]` stops, silhouette kind + colour in each builder, `LADDER[map]` albedos (re-calibrate with a scratch pass after changing a rig: measure the gameplay screenshot with `calPoints()` probes), `CHAR_BOOST.k` (1.3), rim `RIM_SCALE` 1.03 / opacity 0.35 in `addRim`, `MOUNTS[id].back/up`.
 
 ---
 

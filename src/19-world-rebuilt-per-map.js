@@ -121,7 +121,7 @@ function addFloor(half,color,gridColor){
     new THREE.MeshStandardMaterial({color:color,roughness:.96,metalness:.04}));
   floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; world.add(floor);
   const grid=new THREE.GridHelper(half*2,half,gridColor,0x223044);
-  grid.material.opacity=.45; grid.material.transparent=true; grid.position.y=0.012; world.add(grid);
+  grid.material.opacity=.2; grid.material.transparent=true; grid.position.y=0.012; world.add(grid);   // kept faint so the floor rung of the value ladder stays readable
 }
 function addWalls(half,color){
   const WH=6, T=1.2;
@@ -152,7 +152,8 @@ function addPortal(x,z,color,label,action){
   interactables.push({pos:new THREE.Vector3(x,0,z),r:2.3,label:label,action:action});
 }
 function clearWorld(){
-  while(world.children.length){ const o=world.children.pop(); world.remove(o); if(colliderMeshes.indexOf(o)>=0&&o.geometry)o.geometry.dispose(); }
+  while(world.children.length){ const o=world.children.pop(); world.remove(o); if(colliderMeshes.indexOf(o)>=0&&o.geometry)o.geometry.dispose();
+    if(o.userData.disposable){ if(o.geometry)o.geometry.dispose(); if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } } }
   pendingBlocks={}; pendingProps={}; barrels.length=0;
   boxes.length=0; colliderMeshes.length=0; interactables.length=0; spinners.length=0;
   targets.length=0; targetHitMeshes=[]; hitListVer++;
@@ -165,13 +166,49 @@ function clearWorld(){
   feed.innerHTML='';
 }
 
+/* ---- sky: gradient dome + stars + one unlit silhouette band, rebuilt per map (lives in `world`) ---- */
+const SKY_R=150, SIL_R=140;
+const SKY_DEFAULT=[[0,'#03040a'],[.55,'#0a1220'],[.8,'#16263c'],[1,'#20344f']];
+function buildSky(stops,starCount,silhouette,silColor){
+  const cv=document.createElement('canvas'); cv.width=4; cv.height=256; const ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,0,256); stops.forEach(s=>g.addColorStop(s[0],s[1])); ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
+  const tex=new THREE.CanvasTexture(cv);
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(SKY_R,24,16),new THREE.MeshBasicMaterial({map:tex,side:THREE.BackSide,fog:false,depthWrite:false}));
+  sky.renderOrder=-3; sky.userData.disposable=true; world.add(sky);
+  const count=Math.round(starCount*Q.cfg.stars/420);
+  if(count>0){
+    const pts=new Float32Array(count*3);
+    for(let i=0;i<count;i++){ const a=Math.random()*Math.PI*2, e=Math.random()*0.62+0.05, r=SKY_R-8; pts[i*3]=Math.cos(a)*Math.cos(e)*r; pts[i*3+1]=Math.sin(e)*r; pts[i*3+2]=Math.sin(a)*Math.cos(e)*r; }
+    const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.BufferAttribute(pts,3));
+    const st=new THREE.Points(pg,new THREE.PointsMaterial({color:0x9fc2ff,size:.72,sizeAttenuation:true,transparent:true,opacity:.75,fog:false,depthWrite:false}));
+    st.renderOrder=-2; st.userData.disposable=true; world.add(st);
+  }
+  if(silhouette)world.add(buildSilhouette(silhouette,silColor||0x000000));
+}
+/* one low-poly extruded strip at SIL_R: a height profile per kind (stacks / masts / ridge / towers), seeded so it never changes */
+function buildSilhouette(kind,color){
+  const N=256, rng=mulberry32({stacks:11,masts:23,ridge:37,towers:53}[kind]||7), h=new Float32Array(N);
+  const base=kind==='ridge'?6:kind==='masts'?2.5:4; for(let i=0;i<N;i++)h[i]=base;
+  const add=(c,w,ht)=>{ for(let k=-w;k<=w;k++){ const i=((c+k)%N+N)%N; if(ht>h[i])h[i]=ht; } };
+  if(kind==='stacks'){ for(let k=0;k<26;k++)add(Math.floor(rng()*N),1+Math.floor(rng()*5),8+rng()*16); for(let k=0;k<9;k++)add(Math.floor(rng()*N),0,26+rng()*16); }
+  else if(kind==='masts'){ for(let k=0;k<14;k++){ const c=Math.floor(rng()*N); add(c,0,24+rng()*22); add(c,2,6+rng()*4); } for(let k=0;k<10;k++)add(Math.floor(rng()*N),2+Math.floor(rng()*3),5+rng()*6); }
+  else if(kind==='ridge'){ for(let i=0;i<N;i++){ const a=i/N*Math.PI*2; h[i]=9+5*Math.sin(a*3+1)+3.5*Math.sin(a*7+2)+2*Math.sin(a*13+.5)+1.2*Math.sin(a*29); } }
+  else { for(let k=0;k<9;k++)add(Math.floor(rng()*N),3+Math.floor(rng()*6),18+rng()*18); for(let k=0;k<5;k++)add(Math.floor(rng()*N),1,34+rng()*10); }
+  const pos=new Float32Array((N+1)*6), idx=[];
+  for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2, j=i%N, x=Math.cos(a)*SIL_R, z=Math.sin(a)*SIL_R; pos[i*6]=x; pos[i*6+1]=-6; pos[i*6+2]=z; pos[i*6+3]=x; pos[i*6+4]=h[j]; pos[i*6+5]=z; }
+  for(let i=0;i<N;i++){ const a=i*2,b=i*2+1,c=(i+1)*2,d=(i+1)*2+1; idx.push(a,b,c,b,d,c); }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); geo.setIndex(idx);
+  const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:color,fog:false,side:THREE.DoubleSide,depthWrite:false}));
+  m.renderOrder=-1; m.frustumCulled=false; m.userData.disposable=true; return m;
+}
+
 /* ---- map: lobby ---- */
 const podDisplays=[];
 function buildLobby(){
   ARENA=16;
-  addFloor(ARENA,0x151b24,0x2f4f7a);
-  addWalls(ARENA,0x232c38);
-  scene.fog.color.set(0x090c14); scene.background.set(0x090c14);
+  const L=LADDER.lobby; addFloor(ARENA,L.floor,0x2f4f7a);
+  addWalls(ARENA,L.wall);
+  setTheme({fogColor:0x090c14}); buildSky(SKY_DEFAULT,420,null);
   /* character pods along the back wall */
   podDisplays.length=0;
   CHARS.forEach((ch,i)=>{
@@ -190,7 +227,7 @@ function buildLobby(){
     interactables.push({pos:new THREE.Vector3(x,0,z),r:2.6,label:'Select '+ch.name,action:()=>selectChar(i,true)});
   });
   /* back wall panel */
-  addBlock(0,0,-14.5,22,4.5,.6,0x1e2733);
+  addBlock(0,0,-14.5,22,4.5,.6,L.cover);
   const title=makeLabel('FERROUS ARENA','#4ea8ff',1.6); title.position.set(0,5.4,-14); world.add(title);
   /* portals */
   addPortal(-11,3,0x3ddc84,'Shooting Range',()=>goRange());
@@ -198,7 +235,7 @@ function buildLobby(){
   /* set dressing: lockers and shelves along the side walls, a desk by the range portal, crates by the deploy portal */
   if(MODELS.ok){ for(let i=0;i<4;i++){ addProp('locker',-15,-8+i*1.1,90,2.3,true); addProp('locker',15,-8+i*1.1,-90,2.3,true); }
     addProp('shelves',-14.9,4,90,2.3,true); addProp('desk',-11,-4,0,.9,true); addProp('crate_large',12,-6,90,1.4,true); addProp('crate_tarp',13,10,20,1.5,true); addProp('crate_tarp',-8,12.5,160,1.4,true); addProp('barrel2',9,12.5,0,.8,true); addProp('barrel2',10,13.4,40,.8,true); }
-  else [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?0x33404f:0x2c3745));
+  else [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?L.coverA:L.coverB));
   finalizeWorld(); updatePodRings();
 }
 function updatePodRings(emote){
@@ -220,17 +257,17 @@ function tickPods(dt,eye){
 /* ---- map: practice range ---- */
 function buildRange(){
   ARENA=22;
-  addFloor(ARENA,0x121a17,0x2f7a5a);
-  addWalls(ARENA,0x22302a);
-  scene.fog.color.set(0x070d0b); scene.background.set(0x070d0b);
+  const L=LADDER.range; addFloor(ARENA,L.floor,0x2f7a5a);
+  addWalls(ARENA,L.wall);
+  setTheme({fogColor:0x070d0b}); buildSky(SKY_DEFAULT,420,null);
   /* firing line */
-  addBlock(0,0,10,14,1.1,.8,0x2c3745);
+  addBlock(0,0,10,14,1.1,.8,L.cover);
   /* targets on the far wall at varying distance */
   const plates=[[-9,-6],[-4.5,-10],[0,-14],[4.5,-10],[9,-6],[-12,-16],[12,-16]];
   plates.forEach(p=>addTarget(p[0],p[1],false));
   addTarget(-6,-18,true); addTarget(6,-18,true);
   /* cover to practise peeking, barrels to practise blowing up */
-  addBlock(-14,0,-2,2.2,2.2,2.2,0x33404f); addBlock(14,0,-2,2.2,2.2,2.2,0x33404f);
+  addBlock(-14,0,-2,2.2,2.2,2.2,L.coverA); addBlock(14,0,-2,2.2,2.2,2.2,L.coverA);
   if(MODELS.ok){ addBarrel(-9,-11); addBarrel(9,-11); addProp('crate_large',-17,6,90,1.4,true); addProp('crate_large',17,6,90,1.4,true); addProp('shelves',-19.5,-8,90,2.3,true); addProp('desk',18,12,180,.9,true); addProp('barrel2',-16,14,0,.8,true); }
   addPortal(0,18,0xffc247,'Return to Lobby',()=>goLobby());
   /* dummies */

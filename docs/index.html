@@ -4559,10 +4559,15 @@ function spawnCharacter(id,tint){
   const bones={};
   inst.traverse(o=>{ if(o.isBone||o.type==='Bone')bones[o.name]=o; if(o.isMesh){ o.material=o.material.clone(); o.castShadow=true;
     if(tint!==undefined){ if(rec.textured){ o.material.emissive.set(tint); o.material.emissiveIntensity=1.6; o.material.color.set(tint).lerp(new THREE.Color(0xffffff),0.55); }   // coloured cast on the dark metal + glow
-      else if(o.material.name==='Main')o.material.color.set(tint); } } });
+      else if(o.material.name==='Main')o.material.color.set(tint); }
+    if(!rec.textured)charBoost(o.material,tint!==undefined?CHAR_BOOST.enemy:CHAR_BOOST.k); } });
   const animator=makeAnimator(inst,rec.animations);
   return {group:inst,animator:animator,bones:bones,scale:s,height:rec.height||CHAR_HEIGHT};
 }
+/* value ladder: flat-coloured characters get a self-light (emissive = albedo x CHAR_BOOST) so they sit above the world in the
+   ladder — the floor reads ~10 % on screen, operatives and enemies ~45-60 % — independent of how dark a map is lit */
+const CHAR_BOOST={k:1.64,enemy:0.5};   // k solved by the calibration pass (Vanguard torso ~0.52 sRGB on Foundry); enemies carry a saturated tint, so less
+function charBoost(m,k){ if(!m.emissive)return; m.emissive.copy(m.color); m.emissiveIntensity=k===undefined?CHAR_BOOST.k:k; }
 /* a static prop (weapon, crate, target) */
 function spawnProp(id,tint){
   const rec=MODELS.items[id]; if(!rec)return null;
@@ -4630,6 +4635,30 @@ function makeAnimator(root,clips){
   };
   return A;
 }
+/* ---- rim pass: an inflated back-face shell in additive blend, so every character carries a coloured edge light that
+   separates it from the floor. Skinned meshes: the shell is made by scaling the bind matrix (the clone's own transform
+   cancels out in 'attached' bind mode), so it follows the animation exactly; plain meshes get a scaled sibling. Off on the
+   low tier (applyQuality toggles `userData.rim` visibility). ---- */
+const RIM_SCALE=1.03, _rimM=new THREE.Matrix4();
+function geoCentre(geo){
+  if(geo.userData.centre)return geo.userData.centre;
+  const P=geo.attributes.position; let mn=[Infinity,Infinity,Infinity], mx=[-Infinity,-Infinity,-Infinity];
+  for(let i=0;i<P.count;i++)for(let k=0;k<3;k++){ const v=attrAt(P,i,k); if(v<mn[k])mn[k]=v; if(v>mx[k])mx[k]=v; }
+  return geo.userData.centre=new THREE.Vector3((mn[0]+mx[0])/2,(mn[1]+mx[1])/2,(mn[2]+mx[2])/2);
+}
+function addRim(group,color){
+  const mk=sk=>new THREE.MeshBasicMaterial({color:color,side:THREE.BackSide,transparent:true,opacity:0.35,blending:THREE.AdditiveBlending,depthWrite:false,skinning:sk});   // r128: skinning is a material flag
+  const matS=mk(true), matM=mk(false);
+  const list=[]; group.traverse(o=>{ if(o.isMesh&&!o.userData.rim&&o.material!==MAT_HIDDEN&&o.geometry.attributes.position)list.push(o); });
+  for(const o of list){
+    const c=geoCentre(o.geometry);
+    const r=o.clone(); r.material=o.isSkinnedMesh?matS:matM; r.userData.rim=true; r.castShadow=false; r.receiveShadow=false; r.frustumCulled=false; r.renderOrder=1; r.visible=Q.tier!=='low';
+    _rimM.makeTranslation(c.x,c.y,c.z).multiply(new THREE.Matrix4().makeScale(RIM_SCALE,RIM_SCALE,RIM_SCALE)).multiply(new THREE.Matrix4().makeTranslation(-c.x,-c.y,-c.z));
+    if(o.isSkinnedMesh){ r.bindMatrix.multiply(_rimM); o.parent.add(r); }
+    else { const w=new THREE.Object3D(); w.userData.rim=true; w.matrixAutoUpdate=false; w.matrix.copy(o.matrix).multiply(_rimM).multiply(new THREE.Matrix4().copy(o.matrix).invert()); w.matrixAutoUpdate=false; w.add(r); o.parent.add(w); }
+  }
+  return group;
+}
 
 /* ---- 11-constants.js ---- */
 /* ============================ constants ============================ */
@@ -4641,6 +4670,7 @@ const MELEE_TOKENS=3;             // chasers allowed in the attack state at once
 const timers=[];
 function after(t,fn){ timers.push({t:t,fn:fn}); }
 function tickTimers(dt){ for(let i=timers.length-1;i>=0;i--){ const tm=timers[i]; if(!tm)continue; tm.t-=dt; if(tm.t<=0){ timers.splice(i,1); tm.fn(); } } }
+const CAM={shoulder:1.05,dist:4.4,pivotY:0.15,aimFov:10,lead:4*Math.PI/180};   // over-the-shoulder camera; lead = yaw toward the direction of travel
 
 /* ---- 12-data-characters.js ---- */
 /* ============================ data: characters ============================ */
@@ -4780,7 +4810,8 @@ scene.background=new THREE.Color(0x070b12);
 scene.fog=new THREE.Fog(0x070b12,20,64);
 const camera=new THREE.PerspectiveCamera(66,1,0.1,300);
 
-scene.add(new THREE.HemisphereLight(0x8fb4ff,0x0d1119,0.34));
+/* light rig — one key (sun, shadows), one rim, one hemisphere; per-map values come through setTheme() -> applyRig() */
+const hemi=new THREE.HemisphereLight(0x8fb4ff,0x0d1119,0.34); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xdce9ff,0.78);
 sun.position.set(24,38,16); sun.castShadow=true;
 sun.shadow.mapSize.set(2048,2048);
@@ -4788,6 +4819,18 @@ const sc=sun.shadow.camera; sc.left=-46;sc.right=46;sc.top=46;sc.bottom=-46;sc.n
 sun.shadow.bias=-0.0009;
 scene.add(sun);
 const rim=new THREE.DirectionalLight(0x4a7bff,.26); rim.position.set(-20,12,-24); scene.add(rim);
+const RIG_DEFAULT={sunColor:0xdce9ff,sunIntensity:0.78,sunDir:[24,38,16],rimColor:0x4a7bff,rimIntensity:0.26,rimDir:[-20,12,-24],
+  hemiSky:0x8fb4ff,hemiGround:0x0d1119,hemiIntensity:0.34,exposure:1.05,fogColor:0x070b12,fogFar:64,key:1};
+let currentRig=RIG_DEFAULT;
+function applyRig(r){
+  currentRig=r;
+  const key=r.key===undefined?1:r.key;   // per-map light multiplier (calibrated so the floor lands at ~10 % screen luminance)
+  sun.color.set(r.sunColor); sun.intensity=r.sunIntensity*key; sun.position.set(r.sunDir[0],r.sunDir[1],r.sunDir[2]);
+  rim.color.set(r.rimColor); rim.intensity=r.rimIntensity*key; rim.position.set(r.rimDir[0],r.rimDir[1],r.rimDir[2]);
+  hemi.color.set(r.hemiSky); hemi.groundColor.set(r.hemiGround); hemi.intensity=r.hemiIntensity*key;
+  renderer.toneMappingExposure=r.exposure;
+  scene.fog.color.set(r.fogColor); scene.background.set(r.fogColor); scene.fog.far=Math.min(r.fogFar,Q.cfg.fog+20);
+}
 
 function applyQuality(tier){
   Q.tier=tier; Q.cfg=TIERS[tier]; const c=Q.cfg;
@@ -4797,8 +4840,8 @@ function applyQuality(tier){
   sun.castShadow=c.shadow;
   if(sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map=null; }
   sun.shadow.mapSize.set(c.shadowSize,c.shadowSize);
-  scene.fog.far=c.fog;
-  scene.traverse(o=>{ if(o.material&&o.material.needsUpdate!==undefined)o.material.needsUpdate=true; });
+  scene.fog.far=Math.min(currentRig.fogFar,c.fog+20);
+  scene.traverse(o=>{ if(o.userData.rim)o.visible=tier!=='low'; if(o.material&&o.material.needsUpdate!==undefined)o.material.needsUpdate=true; });
   resize();
 }
 function setQuality(choice){ /* 'auto' | tier */
@@ -4806,24 +4849,6 @@ function setQuality(choice){ /* 'auto' | tier */
   if(choice==='auto'){ Q.auto=true; applyQuality(detectTier()); Q.probe={t:0,frames:0,done:false}; }
   else { Q.auto=false; applyQuality(choice); }
 }
-
-/* gradient sky dome */
-(function(){
-  const cv=document.createElement('canvas'); cv.width=4; cv.height=256;
-  const g=cv.getContext('2d').createLinearGradient(0,0,0,256);
-  g.addColorStop(0,'#03040a'); g.addColorStop(.55,'#0a1220'); g.addColorStop(.8,'#16263c'); g.addColorStop(1,'#20344f');
-  const ctx=cv.getContext('2d'); ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
-  const tex=new THREE.CanvasTexture(cv);
-  const sky=new THREE.Mesh(new THREE.SphereGeometry(150,24,16),
-    new THREE.MeshBasicMaterial({map:tex,side:THREE.BackSide,fog:false,depthWrite:false}));
-  scene.add(sky);
-  const pts=[]; for(let i=0;i<Q.cfg.stars;i++){
-    const a=Math.random()*Math.PI*2, e=Math.random()*0.62+0.03, r=140;
-    pts.push(new THREE.Vector3(Math.cos(a)*Math.cos(e)*r,Math.sin(e)*r,Math.sin(a)*Math.cos(e)*r));
-  }
-  const pg=new THREE.BufferGeometry().setFromPoints(pts);
-  scene.add(new THREE.Points(pg,new THREE.PointsMaterial({color:0x9fc2ff,size:.72,sizeAttenuation:true,transparent:true,opacity:.75,fog:false})));
-})();
 
 /* ---- 19-world-rebuilt-per-map.js ---- */
 /* ============================ world (rebuilt per map) ============================ */
@@ -4949,7 +4974,7 @@ function addFloor(half,color,gridColor){
     new THREE.MeshStandardMaterial({color:color,roughness:.96,metalness:.04}));
   floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; world.add(floor);
   const grid=new THREE.GridHelper(half*2,half,gridColor,0x223044);
-  grid.material.opacity=.45; grid.material.transparent=true; grid.position.y=0.012; world.add(grid);
+  grid.material.opacity=.2; grid.material.transparent=true; grid.position.y=0.012; world.add(grid);   // kept faint so the floor rung of the value ladder stays readable
 }
 function addWalls(half,color){
   const WH=6, T=1.2;
@@ -4980,7 +5005,8 @@ function addPortal(x,z,color,label,action){
   interactables.push({pos:new THREE.Vector3(x,0,z),r:2.3,label:label,action:action});
 }
 function clearWorld(){
-  while(world.children.length){ const o=world.children.pop(); world.remove(o); if(colliderMeshes.indexOf(o)>=0&&o.geometry)o.geometry.dispose(); }
+  while(world.children.length){ const o=world.children.pop(); world.remove(o); if(colliderMeshes.indexOf(o)>=0&&o.geometry)o.geometry.dispose();
+    if(o.userData.disposable){ if(o.geometry)o.geometry.dispose(); if(o.material){ if(o.material.map)o.material.map.dispose(); o.material.dispose(); } } }
   pendingBlocks={}; pendingProps={}; barrels.length=0;
   boxes.length=0; colliderMeshes.length=0; interactables.length=0; spinners.length=0;
   targets.length=0; targetHitMeshes=[]; hitListVer++;
@@ -4993,13 +5019,49 @@ function clearWorld(){
   feed.innerHTML='';
 }
 
+/* ---- sky: gradient dome + stars + one unlit silhouette band, rebuilt per map (lives in `world`) ---- */
+const SKY_R=150, SIL_R=140;
+const SKY_DEFAULT=[[0,'#03040a'],[.55,'#0a1220'],[.8,'#16263c'],[1,'#20344f']];
+function buildSky(stops,starCount,silhouette,silColor){
+  const cv=document.createElement('canvas'); cv.width=4; cv.height=256; const ctx=cv.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,0,256); stops.forEach(s=>g.addColorStop(s[0],s[1])); ctx.fillStyle=g; ctx.fillRect(0,0,4,256);
+  const tex=new THREE.CanvasTexture(cv);
+  const sky=new THREE.Mesh(new THREE.SphereGeometry(SKY_R,24,16),new THREE.MeshBasicMaterial({map:tex,side:THREE.BackSide,fog:false,depthWrite:false}));
+  sky.renderOrder=-3; sky.userData.disposable=true; world.add(sky);
+  const count=Math.round(starCount*Q.cfg.stars/420);
+  if(count>0){
+    const pts=new Float32Array(count*3);
+    for(let i=0;i<count;i++){ const a=Math.random()*Math.PI*2, e=Math.random()*0.62+0.05, r=SKY_R-8; pts[i*3]=Math.cos(a)*Math.cos(e)*r; pts[i*3+1]=Math.sin(e)*r; pts[i*3+2]=Math.sin(a)*Math.cos(e)*r; }
+    const pg=new THREE.BufferGeometry(); pg.setAttribute('position',new THREE.BufferAttribute(pts,3));
+    const st=new THREE.Points(pg,new THREE.PointsMaterial({color:0x9fc2ff,size:.72,sizeAttenuation:true,transparent:true,opacity:.75,fog:false,depthWrite:false}));
+    st.renderOrder=-2; st.userData.disposable=true; world.add(st);
+  }
+  if(silhouette)world.add(buildSilhouette(silhouette,silColor||0x000000));
+}
+/* one low-poly extruded strip at SIL_R: a height profile per kind (stacks / masts / ridge / towers), seeded so it never changes */
+function buildSilhouette(kind,color){
+  const N=256, rng=mulberry32({stacks:11,masts:23,ridge:37,towers:53}[kind]||7), h=new Float32Array(N);
+  const base=kind==='ridge'?6:kind==='masts'?2.5:4; for(let i=0;i<N;i++)h[i]=base;
+  const add=(c,w,ht)=>{ for(let k=-w;k<=w;k++){ const i=((c+k)%N+N)%N; if(ht>h[i])h[i]=ht; } };
+  if(kind==='stacks'){ for(let k=0;k<26;k++)add(Math.floor(rng()*N),1+Math.floor(rng()*5),8+rng()*16); for(let k=0;k<9;k++)add(Math.floor(rng()*N),0,26+rng()*16); }
+  else if(kind==='masts'){ for(let k=0;k<14;k++){ const c=Math.floor(rng()*N); add(c,0,24+rng()*22); add(c,2,6+rng()*4); } for(let k=0;k<10;k++)add(Math.floor(rng()*N),2+Math.floor(rng()*3),5+rng()*6); }
+  else if(kind==='ridge'){ for(let i=0;i<N;i++){ const a=i/N*Math.PI*2; h[i]=9+5*Math.sin(a*3+1)+3.5*Math.sin(a*7+2)+2*Math.sin(a*13+.5)+1.2*Math.sin(a*29); } }
+  else { for(let k=0;k<9;k++)add(Math.floor(rng()*N),3+Math.floor(rng()*6),18+rng()*18); for(let k=0;k<5;k++)add(Math.floor(rng()*N),1,34+rng()*10); }
+  const pos=new Float32Array((N+1)*6), idx=[];
+  for(let i=0;i<=N;i++){ const a=i/N*Math.PI*2, j=i%N, x=Math.cos(a)*SIL_R, z=Math.sin(a)*SIL_R; pos[i*6]=x; pos[i*6+1]=-6; pos[i*6+2]=z; pos[i*6+3]=x; pos[i*6+4]=h[j]; pos[i*6+5]=z; }
+  for(let i=0;i<N;i++){ const a=i*2,b=i*2+1,c=(i+1)*2,d=(i+1)*2+1; idx.push(a,b,c,b,d,c); }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); geo.setIndex(idx);
+  const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:color,fog:false,side:THREE.DoubleSide,depthWrite:false}));
+  m.renderOrder=-1; m.frustumCulled=false; m.userData.disposable=true; return m;
+}
+
 /* ---- map: lobby ---- */
 const podDisplays=[];
 function buildLobby(){
   ARENA=16;
-  addFloor(ARENA,0x151b24,0x2f4f7a);
-  addWalls(ARENA,0x232c38);
-  scene.fog.color.set(0x090c14); scene.background.set(0x090c14);
+  const L=LADDER.lobby; addFloor(ARENA,L.floor,0x2f4f7a);
+  addWalls(ARENA,L.wall);
+  setTheme({fogColor:0x090c14}); buildSky(SKY_DEFAULT,420,null);
   /* character pods along the back wall */
   podDisplays.length=0;
   CHARS.forEach((ch,i)=>{
@@ -5018,7 +5080,7 @@ function buildLobby(){
     interactables.push({pos:new THREE.Vector3(x,0,z),r:2.6,label:'Select '+ch.name,action:()=>selectChar(i,true)});
   });
   /* back wall panel */
-  addBlock(0,0,-14.5,22,4.5,.6,0x1e2733);
+  addBlock(0,0,-14.5,22,4.5,.6,L.cover);
   const title=makeLabel('FERROUS ARENA','#4ea8ff',1.6); title.position.set(0,5.4,-14); world.add(title);
   /* portals */
   addPortal(-11,3,0x3ddc84,'Shooting Range',()=>goRange());
@@ -5026,7 +5088,7 @@ function buildLobby(){
   /* set dressing: lockers and shelves along the side walls, a desk by the range portal, crates by the deploy portal */
   if(MODELS.ok){ for(let i=0;i<4;i++){ addProp('locker',-15,-8+i*1.1,90,2.3,true); addProp('locker',15,-8+i*1.1,-90,2.3,true); }
     addProp('shelves',-14.9,4,90,2.3,true); addProp('desk',-11,-4,0,.9,true); addProp('crate_large',12,-6,90,1.4,true); addProp('crate_tarp',13,10,20,1.5,true); addProp('crate_tarp',-8,12.5,160,1.4,true); addProp('barrel2',9,12.5,0,.8,true); addProp('barrel2',10,13.4,40,.8,true); }
-  else [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?0x33404f:0x2c3745));
+  else [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?L.coverA:L.coverB));
   finalizeWorld(); updatePodRings();
 }
 function updatePodRings(emote){
@@ -5048,17 +5110,17 @@ function tickPods(dt,eye){
 /* ---- map: practice range ---- */
 function buildRange(){
   ARENA=22;
-  addFloor(ARENA,0x121a17,0x2f7a5a);
-  addWalls(ARENA,0x22302a);
-  scene.fog.color.set(0x070d0b); scene.background.set(0x070d0b);
+  const L=LADDER.range; addFloor(ARENA,L.floor,0x2f7a5a);
+  addWalls(ARENA,L.wall);
+  setTheme({fogColor:0x070d0b}); buildSky(SKY_DEFAULT,420,null);
   /* firing line */
-  addBlock(0,0,10,14,1.1,.8,0x2c3745);
+  addBlock(0,0,10,14,1.1,.8,L.cover);
   /* targets on the far wall at varying distance */
   const plates=[[-9,-6],[-4.5,-10],[0,-14],[4.5,-10],[9,-6],[-12,-16],[12,-16]];
   plates.forEach(p=>addTarget(p[0],p[1],false));
   addTarget(-6,-18,true); addTarget(6,-18,true);
   /* cover to practise peeking, barrels to practise blowing up */
-  addBlock(-14,0,-2,2.2,2.2,2.2,0x33404f); addBlock(14,0,-2,2.2,2.2,2.2,0x33404f);
+  addBlock(-14,0,-2,2.2,2.2,2.2,L.coverA); addBlock(14,0,-2,2.2,2.2,2.2,L.coverA);
   if(MODELS.ok){ addBarrel(-9,-11); addBarrel(9,-11); addProp('crate_large',-17,6,90,1.4,true); addProp('crate_large',17,6,90,1.4,true); addProp('shelves',-19.5,-8,90,2.3,true); addProp('desk',18,12,180,.9,true); addProp('barrel2',-16,14,0,.8,true); }
   addPortal(0,18,0xffc247,'Return to Lobby',()=>goLobby());
   /* dummies */
@@ -5097,7 +5159,31 @@ function addTarget(x,z,moving){
 /* Each builder sets ARENA, paints the floor/fog, lays out blocks with addBlock(), fills `mapData` with anything the
    loop needs (ice patches, the reactor pulse) and ends with finalizeWorld(), which merges geometry and bakes the nav grid. */
 const mapData={ice:[],pulse:null,spawnRing:0};
-function setTheme(fog,far){ scene.fog.color.set(fog); scene.background.set(fog); scene.fog.far=Math.min(far,Q.cfg.fog+20); }
+/* per-map light rig (merged over RIG_DEFAULT) — see applyRig() in 18-renderer-scene */
+function setTheme(rig){ applyRig(Object.assign({},RIG_DEFAULT,rig)); }
+const RIGS={
+  foundry:{sunColor:0xffb27a,sunIntensity:0.95,sunDir:[30,14,18],rimColor:0x3a6fd0,rimIntensity:0.45,rimDir:[-20,10,-24],hemiSky:0x2e4a7a,hemiGround:0x2a1408,hemiIntensity:0.4,exposure:1.0,fogColor:0x1a0d08,fogFar:64,key:0.452},   // warm sodium key from low on the right, cold blue fill
+  relay:  {sunColor:0xdce9ff,sunIntensity:0.85,sunDir:[26,30,18],rimColor:0x4a7bff,rimIntensity:0.25,rimDir:[-20,12,-24],hemiSky:0x8fb4ff,hemiGround:0x0d1119,hemiIntensity:0.36,exposure:1.05,fogColor:0x0a1220,fogFar:64,key:0.269},  // neutral cool, high key
+  frost:  {sunColor:0xe8f0ff,sunIntensity:0.45,sunDir:[14,30,10],rimColor:0xbfd4ff,rimIntensity:0.15,rimDir:[-20,12,-24],hemiSky:0xcfdcea,hemiGround:0x8a96a2,hemiIntensity:0.75,exposure:1.1,fogColor:0x3b4754,fogFar:40,key:0.23},    // flat white overcast, low contrast, heavy fog
+  reactor:{sunColor:0x6a4d9b,sunIntensity:0.3,sunDir:[-14,22,26],rimColor:0xff3dc8,rimIntensity:0.8,rimDir:[-20,6,-24],hemiSky:0x1a1024,hemiGround:0x050308,hemiIntensity:0.3,exposure:0.9,fogColor:0x0a0710,fogFar:56,key:1.26}      // near-black ambient, magenta rim from low
+};
+/* surface albedos per map: floor 0.9 % linear everywhere, cover / walls per map (5-11 % / 5-17.5 %) solved from a screenshot pass so the
+   gameplay view reads floor ~10 %, cover ~15-21 %, walls up to ~32 % sRGB (walls beyond 30 m read as fog). The rig `key` (light
+   multiplier, calibrated) lands the floor; keys: Foundry 0.45, Relay 0.27, Frost 0.23, Reactor 1.26. */
+const LADDER={
+  lobby:  {floor:0x131821,cover:0x2d3949,coverA:0x313d4b,coverB:0x2b3543,wall:0x425165},
+  range:  {floor:0x121917,cover:0x2e3948,coverA:0x313d4b,coverB:0x2a3643,wall:0x3e554b},
+  foundry:{floor:0x1d1712,cover:0x4e4037,coverA:0x52443a,coverB:0x453c37,wall:0x847162},
+  relay:  {floor:0x111822,cover:0x4a596f,coverA:0x4d5f74,coverB:0x445468,wall:0x617691},
+  frost:  {floor:0x0f1921,cover:0x35485d,coverA:0x384d5e,coverB:0x314357,wall:0x5c778e},
+  reactor:{floor:0x1b161d,cover:0x655171,coverA:0x6b5385,coverB:0x5b4d6d,wall:0x493955}
+};
+const SKIES={
+  foundry:[[0,'#06040a'],[.5,'#1a0e0c'],[.8,'#4a2410'],[1,'#8a4a1e']],
+  relay:  [[0,'#02030a'],[.55,'#0a1220'],[.8,'#16263c'],[1,'#26405f']],
+  frost:  [[0,'#5a6a7c'],[.5,'#7c8c9c'],[.85,'#9aa8b6'],[1,'#b4bfc9']],
+  reactor:[[0,'#010102'],[.6,'#05030a'],[.85,'#160a26'],[1,'#2a0f3a']]
+};
 function resetMapData(){ mapData.ice.length=0; mapData.pulse=null; mapData.spawnRing=0; }
 /* set dressing helper: [id,x,z,rotDeg,height,solid,y] rows; explosive barrels as [x,z] pairs. Skipped when the models failed to parse. */
 function dress(props,barrelsAt){ if(!MODELS.ok)return; props.forEach(p=>addProp(p[0],p[1],p[2],p[3],p[4],p[5]!==false,p[6]||0)); (barrelsAt||[]).forEach(b=>addBarrel(b[0],b[1])); }
@@ -5105,8 +5191,8 @@ function dress(props,barrelsAt){ if(!MODELS.ok)return; props.forEach(p=>addProp(
 /* ---- 1. Foundry — the original arena, retuned warm ---- */
 function buildFoundry(){
   ARENA=34; resetMapData();
-  addFloor(ARENA,0x1a1410,0x8a4a1e);
-  addWalls(ARENA,0x2e2620);
+  const L=LADDER.foundry; addFloor(ARENA,L.floor,0x8a4a1e);
+  addWalls(ARENA,L.wall);
   const COVER=[
     [0,0,7,2.2,7],[0,0,-7,2.2,7],[13,0,13,2.6,5],[-13,0,13,2.6,5],[13,0,-13,2.6,5],[-13,0,-13,2.6,5],
     [20,0,0,1.4,10],[-20,0,0,1.4,10],[0,0,20,10,1.4],[0,0,-20,10,1.4],
@@ -5114,9 +5200,9 @@ function buildFoundry(){
     [26,0,26,2,2],[-26,0,26,2,2],[26,0,-26,2,2],[-26,0,-26,2,2]
   ];
   COVER.forEach((c,i)=>{ const w=(i%3===0)?3.2:2.4;
-    addBlock(c[0],c[1],c[2],(c[3]>4?c[3]:w),c[3]>4?2.2:c[3],(c[4]>4?c[4]:w),i%2?0x3a2f28:0x2c2622); });
+    addBlock(c[0],c[1],c[2],(c[3]>4?c[3]:w),c[3]>4?2.2:c[3],(c[4]>4?c[4]:w),i%2?L.coverA:L.coverB); });
   [[16,0,-22],[-16,0,22],[22,0,16],[-22,0,-16]].forEach(p=>{
-    addBlock(p[0],0,p[2],2.2,4.6,2.2,0x33282a);
+    addBlock(p[0],0,p[2],2.2,4.6,2.2,L.coverA);
     const ring=new THREE.Mesh(new THREE.BoxGeometry(2.35,.16,2.35),basicMat(0xff8a3d)); ring.position.set(p[0],4.2,p[2]); world.add(ring);
     const gl=glowSprite(0xff8a3d,5); gl.position.set(p[0],4.3,p[2]); world.add(gl);
   });
@@ -5127,27 +5213,27 @@ function buildFoundry(){
     ['barrel2',2.4,9.8,0,.8],['barrel2',-2.8,-9.6,30,.8],['barrel2',14.8,16,0,.8],['barrel2',-14.8,-16.2,50,.8],['barrel2',-21.6,-3,0,.8],['barrel2',21.7,3.2,0,.8],
     ['desk',-24,-30,0,.9],['crate_tarp',24,30,180,1.5]],
     [[7,12],[-7,-12],[17.5,5],[-17.5,-5],[11,-19],[-11,19],[25,21],[-25,-21]]);
-  setTheme(0x0b0806,64);
+  setTheme(RIGS.foundry); buildSky(SKIES.foundry,0,'stacks',0x080503);
   finalizeWorld();
 }
 
 /* ---- 2. Relay Station — two raised platforms, stairs, a catwalk between ---- */
 function buildRelay(){
   ARENA=34; resetMapData();
-  addFloor(ARENA,0x121a24,0x39628f);
-  addWalls(ARENA,0x28323f);
+  const L=LADDER.relay; addFloor(ARENA,L.floor,0x39628f);
+  addWalls(ARENA,L.wall);
   for(const sx of[-1,1]){
     const px=sx*16;
-    addBlock(px,0,0,10,3,10,0x2a3442);                              // platform
-    for(let k=0;k<10;k++)addBlock(px,0,5.6+k*1.2,4,0.3*(10-k),1.2,k%2?0x33404f:0x2c3745);   // stairs (south side, rising toward the platform)
-    for(let k=0;k<10;k++)addBlock(px,0,-5.6-k*1.2,4,0.3*(10-k),1.2,k%2?0x33404f:0x2c3745);  // stairs (north side)
+    addBlock(px,0,0,10,3,10,L.cover);                              // platform
+    for(let k=0;k<10;k++)addBlock(px,0,5.6+k*1.2,4,0.3*(10-k),1.2,k%2?L.coverA:L.coverB);   // stairs (south side, rising toward the platform)
+    for(let k=0;k<10;k++)addBlock(px,0,-5.6-k*1.2,4,0.3*(10-k),1.2,k%2?L.coverA:L.coverB);  // stairs (north side)
     for(const sz of[-1,1])for(const ox of[-3.5,3.5])addBlock(px+ox,3,sz*4.6,3,0.9,0.4,0x3a86ff,.4); // railings beside the stair mouths
     const lab=makeLabel(sx<0?'RELAY A':'RELAY B','#8fa2bd',.7); lab.position.set(px,5.2,0); world.add(lab);
   }
-  addBlock(0,0,0,22,3,3,0x2f3c4c);                                  // bridge between the platforms (solid: the nav grid is 2.5D)
+  addBlock(0,0,0,22,3,3,L.cover);                                  // bridge between the platforms (solid: the nav grid is 2.5D)
   [[0,0,20,6,1.2,2],[0,0,-20,6,1.2,2],[-26,0,18,2.4,2.2,2.4],[26,0,-18,2.4,2.2,2.4],[-26,0,-18,2.4,2.2,2.4],[26,0,18,2.4,2.2,2.4],
-   [0,0,10,2.4,1.0,2.4],[0,0,-10,2.4,1.0,2.4],[-8,0,26,4,2.2,1.4],[8,0,-26,4,2.2,1.4]].forEach((c,i)=>addBlock(c[0],c[1],c[2],c[3],c[4],c[5],i%2?0x33404f:0x2c3745));
-  [[28,0,0],[-28,0,0]].forEach(p=>{ addBlock(p[0],0,p[2],2,4.6,2,0x2a3442);
+   [0,0,10,2.4,1.0,2.4],[0,0,-10,2.4,1.0,2.4],[-8,0,26,4,2.2,1.4],[8,0,-26,4,2.2,1.4]].forEach((c,i)=>addBlock(c[0],c[1],c[2],c[3],c[4],c[5],i%2?L.coverA:L.coverB));
+  [[28,0,0],[-28,0,0]].forEach(p=>{ addBlock(p[0],0,p[2],2,4.6,2,L.coverA);
     const gl=glowSprite(0x4ea8ff,5); gl.position.set(p[0],4.4,p[2]); world.add(gl); });
   /* relay dishes and consoles on the platform tops, stores at the wall bays */
   dress([['dish',-16,-2.6,0,4.6,true,3],['dish',16,-2.6,180,4.6,true,3],['desk',-16,2.8,180,.9,true,3],['desk',16,2.8,0,.9,true,3],
@@ -5155,18 +5241,18 @@ function buildRelay(){
     ['crate_large',-8,31,0,1.4],['crate_large',8,-31,0,1.4],['crate_tarp',26,26,30,1.5],['crate_tarp',-26,-26,-30,1.5],['crate_tarp',0,-30,0,1.5],
     ['barrel2',-14,12.6,0,.8],['barrel2',13.2,-12.6,20,.8],['barrel2',22.2,-2.6,0,.8],['barrel2',-22.2,2.6,0,.8]],
     [[0,14],[0,-14],[22,10],[-22,-10],[10,-24],[-10,24]]);
-  setTheme(0x070b12,64);
+  setTheme(RIGS.relay); buildSky(SKIES.relay,420,'masts',0x050810);
   finalizeWorld();
 }
 
 /* ---- 3. Frost Array — open ground, sparse pillars, dense fog, ice patches ---- */
 function buildFrost(){
   ARENA=36; resetMapData();
-  addFloor(ARENA,0x1c2a36,0x6fb7d6);
-  addWalls(ARENA,0x25323d);
+  const L=LADDER.frost; addFloor(ARENA,L.floor,0x6fb7d6);
+  addWalls(ARENA,L.wall);
   const P=[[10,4],[-10,-4],[4,-14],[-4,14],[20,12],[-20,-12],[16,-20],[-16,20],[26,-2],[-26,2],[0,26],[0,-26]];
-  P.forEach((p,i)=>{ addBlock(p[0],0,p[1],2,4.6+(i%3),2,0x2a3b48); const gl=glowSprite(0xbfe8ff,4); gl.position.set(p[0],5.4+(i%3),p[1]); world.add(gl); });
-  [[6,0,-6,4,1.0,1.4],[-6,0,6,4,1.0,1.4],[22,0,22,1.4,1.0,5],[-22,0,-22,1.4,1.0,5],[24,0,-24,4,1.0,1.4],[-24,0,24,4,1.0,1.4]].forEach(c=>addBlock(c[0],c[1],c[2],c[3],c[4],c[5],0x33465a));
+  P.forEach((p,i)=>{ addBlock(p[0],0,p[1],2,4.6+(i%3),2,L.coverA); const gl=glowSprite(0xbfe8ff,4); gl.position.set(p[0],5.4+(i%3),p[1]); world.add(gl); });
+  [[6,0,-6,4,1.0,1.4],[-6,0,6,4,1.0,1.4],[22,0,22,1.4,1.0,5],[-22,0,-22,1.4,1.0,5],[24,0,-24,4,1.0,1.4],[-24,0,24,4,1.0,1.4]].forEach(c=>addBlock(c[0],c[1],c[2],c[3],c[4],c[5],L.cover));
   const ICE=[[0,0,6],[14,-10,4.5],[-14,10,4.5],[-12,-16,4],[12,16,4],[24,8,3.5],[-24,-8,3.5]];
   ICE.forEach(c=>{
     const m=new THREE.Mesh(new THREE.CircleGeometry(c[2],28),new THREE.MeshBasicMaterial({color:0x8fd3ff,transparent:true,opacity:.22,depthWrite:false}));
@@ -5180,16 +5266,16 @@ function buildFrost(){
     ['crate_tarp',8,-9,10,1.5],['crate_tarp',-8,9,-10,1.5],['crate_tarp',24,-25,0,1.5],['crate_large',-30,0,90,1.4],['crate_large',30,0,90,1.4],['crate_tarp',0,-31,0,1.5],
     ['barrel2',20.5,13,0,.8],['barrel2',-20.5,-13,0,.8],['barrel2',5.2,-15.2,0,.8]],
     [[18,2],[-18,-2],[2,-18],[-2,18],[27,20],[-27,-20]]);
-  setTheme(0x0c141c,40);
+  setTheme(RIGS.frost); buildSky(SKIES.frost,0,'ridge',0x2c3a48);
   finalizeWorld();
 }
 
 /* ---- 4. Reactor Core — concentric tiers around a core that pulses a shockwave ---- */
 function buildReactor(){
   ARENA=30; resetMapData();
-  addFloor(ARENA,0x161218,0x9b4dff);
-  addWalls(ARENA,0x2a2032);
-  addBlock(0,0,0,6,5,6,0x2a2030);                                     // core housing
+  const L=LADDER.reactor; addFloor(ARENA,L.floor,0x9b4dff);
+  addWalls(ARENA,L.wall);
+  addBlock(0,0,0,6,5,6,L.cover);                                     // core housing
   const core=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.2,5.2,24),new THREE.MeshBasicMaterial({color:0x9b4dff,transparent:true,opacity:.35}));
   core.position.set(0,2.6,0); world.add(core);
   const coreGlow=glowSprite(0xb07bff,10); coreGlow.position.set(0,3,0); world.add(coreGlow);
@@ -5197,18 +5283,18 @@ function buildReactor(){
   ring.rotation.x=Math.PI/2; ring.position.set(0,.5,0); ring.visible=false; world.add(ring);
   /* tier walkways: square rings of low slabs (steppable) */
   [[12,0.3],[20,0.6]].forEach(t=>{ const r=t[0],h=t[1];
-    addBlock(0,0, r,r*2+2,h,2,0x2c2436); addBlock(0,0,-r,r*2+2,h,2,0x2c2436);
-    addBlock( r,0,0,2,h,r*2+2,0x2c2436); addBlock(-r,0,0,2,h,r*2+2,0x2c2436); });
-  [[12,12],[-12,12],[12,-12],[-12,-12]].forEach(p=>{ addBlock(p[0],0,p[1],2,3.2,2,0x3a2c4a); });
-  [[20,0],[-20,0],[0,20],[0,-20]].forEach(p=>{ addBlock(p[0],0,p[1],3,1.6,3,0x35283f); const gl=glowSprite(0x9b4dff,4); gl.position.set(p[0],2.2,p[1]); world.add(gl); });
-  [[24,24],[-24,24],[24,-24],[-24,-24]].forEach(p=>addBlock(p[0],0,p[1],2.4,2.2,2.4,0x2c2436));
+    addBlock(0,0, r,r*2+2,h,2,L.coverB); addBlock(0,0,-r,r*2+2,h,2,L.coverB);
+    addBlock( r,0,0,2,h,r*2+2,L.coverB); addBlock(-r,0,0,2,h,r*2+2,L.coverB); });
+  [[12,12],[-12,12],[12,-12],[-12,-12]].forEach(p=>{ addBlock(p[0],0,p[1],2,3.2,2,L.coverA); });
+  [[20,0],[-20,0],[0,20],[0,-20]].forEach(p=>{ addBlock(p[0],0,p[1],3,1.6,3,L.coverA); const gl=glowSprite(0x9b4dff,4); gl.position.set(p[0],2.2,p[1]); world.add(gl); });
+  [[24,24],[-24,24],[24,-24],[-24,-24]].forEach(p=>addBlock(p[0],0,p[1],2.4,2.2,2.4,L.coverB));
   mapData.pulse={t:16,period:20,ring:ring,glow:coreGlow,r:0,active:false,hit:false,warned:false};
   /* control stations at the tier corners, lockers along the walls, coolant barrels on the walkways */
   dress([['desk',12,14.5,180,.9,true,.3],['desk',-12,-14.5,0,.9,true,.3],['locker',-28.6,4,90,2.3],['locker',-28.6,5.1,90,2.3],['locker',-28.6,6.2,90,2.3],['locker',28.6,-4,-90,2.3],['locker',28.6,-5.1,-90,2.3],['locker',28.6,-6.2,-90,2.3],
     ['crate_tarp',0,-27.5,0,1.5],['crate_large',-8,28.5,0,1.4],['crate_tarp',27,27,0,1.5],['shelves',-27.5,-27,45,2.3],
     ['barrel2',14.2,-14.2,0,.8,true,.3],['barrel2',-14.2,14.2,0,.8,true,.3],['barrel2',22.5,2.5,0,.8,true,.6]],
     [[16,5],[-16,-5],[5,-16],[-5,16],[24,-9],[-24,9]]);
-  setTheme(0x0a0710,56);
+  setTheme(RIGS.reactor); buildSky(SKIES.reactor,0,'towers',0x040208);
   finalizeWorld();
 }
 
@@ -5245,7 +5331,7 @@ function stageMod(stage){ return stage<2?null:MODS.find(m=>m.id===run.order.mods
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0
 };
 const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
@@ -5277,13 +5363,34 @@ let gun=null, flash=null, flashMesh=null;
 /* glTF character + weapon; falls back to the procedural box model when models are unavailable */
 /* weapon mount in the right palm bone's space (metres, before the rig scale is divided out); tuned per mech in MOUNTS */
 const GUN_MOUNT={bone:'WristR',pos:[0,0,0],rot:[0,0,0],scale:0.5};   // Wrist.R (GLTFLoader strips the dot); the Sci-Fi Guns pack is modelled at ~2x the humans' scale
-const MOUNTS={};   // per character id overrides: {bone,pos,rot,scale}
+/* per character overrides: pos = grip offset in the palm bone (metres, before the rig scale), rot = extra Euler (rad) after alignGun */
+const MOUNTS={   // back = metres along the barrel toward the shooter, up = metres along the gun's +Y (both in gun space, after alignGun)
+  vanguard:{pos:[0,0,0],rot:[0,0,0],back:0.04,up:-0.01},
+  ranger:  {pos:[0,0,0],rot:[0,0,0],back:0.30,up:-0.02},
+  bulwark: {pos:[0,0,0],rot:[0,0,0],back:0.02,up:0}
+};
+/* Vanguard palette: dark navy instead of near-black, emissive visor and a chest stripe in the accent blue */
+const VANGUARD_NAVY=0x1c2a4a, VANGUARD_ACCENT=0x4ea8ff;
+function applyVanguardPalette(c){
+  c.group.traverse(o=>{ if(!o.isMesh||o.userData.rim)return; const m=o.material;
+    if(m.name==='Swat'){ m.color.set(VANGUARD_NAVY); charBoost(m); }
+    else if(m.name==='Swat_Black'){ m.color.set(0x0c1424); charBoost(m); }
+    else if(m.name==='Visor'){ m.color.set(VANGUARD_ACCENT); m.emissive.set(VANGUARD_ACCENT); m.emissiveIntensity=1.2; } });
+  const chest=c.bones.Chest||c.bones.Torso; if(!chest)return;
+  c.group.updateMatrixWorld(true);
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.035,0.03),new THREE.MeshBasicMaterial({color:VANGUARD_ACCENT}));
+  const wp=new THREE.Vector3(0,1.31,0.2); chest.worldToLocal(wp); stripe.position.copy(wp);
+  const q=new THREE.Quaternion(); chest.getWorldQuaternion(q); stripe.quaternion.copy(q.invert());
+  chest.add(stripe);
+}
 const CHAR_MODEL={vanguard:'human_swat',ranger:'human_scifi',bulwark:'human_space'};
 const GUN_MODEL={vanguard:'gun_ar',ranger:'gun_sniper',bulwark:'gun_cannon'};
 const AIM_BONES=['Chest','Torso','torso'];   // first present bone gets the aim pitch + flinch
 function buildAvatarModel(ch){
   if(MODELS.ok&&MODELS.items[CHAR_MODEL[ch.id]]){
-    const c=spawnCharacter(CHAR_MODEL[ch.id]); c.group.rotation.y=MODEL_YAW;   // outfits keep their own palette
+    const c=spawnCharacter(CHAR_MODEL[ch.id]);
+    if(ch.id==='vanguard')applyVanguardPalette(c);   // the other outfits keep their own palette
+    addRim(c.group,ch.color); c.group.rotation.y=MODEL_YAW;
     const g=new THREE.Group(); g.add(c.group);
     const gunObj=new THREE.Group(); gunObj.name='gun';
     const gunModel=spawnProp(GUN_MODEL[ch.id],ch.color); const gunAxis=gunBarrel(GUN_MODEL[ch.id]);
@@ -5349,6 +5456,9 @@ function alignGun(gunObj,palm,c,mt,ax){
   _m4.makeBasis(tx,ty,tz); const qTarget=new THREE.Quaternion().setFromRotationMatrix(_m4);
   gunObj.quaternion.copy(rel.invert().multiply(qTarget));              // local = inv(rel) * target
   gunObj.position.fromArray(mt.pos).divideScalar(c.scale);
+  if(mt.rot&&(mt.rot[0]||mt.rot[1]||mt.rot[2]))gunObj.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(mt.rot[0],mt.rot[1],mt.rot[2])));   // hand-tuned grip correction
+  if(mt.back||mt.up){ const bv=new THREE.Vector3(); bv[ax.axis]=ax.sign; bv.applyQuaternion(gunObj.quaternion); gunObj.position.addScaledVector(bv,-(mt.back||0)/c.scale);
+    const uv=new THREE.Vector3(0,1,0).applyQuaternion(gunObj.quaternion); gunObj.position.addScaledVector(uv,(mt.up||0)/c.scale); }
   if(shoot){ an.mixer.stopAllAction(); }
 }
 /* rig facing: yaw applied to every character instance so the model looks down the game's -Z; GUN_AXIS: the kit guns' barrel direction in model space */
@@ -5405,7 +5515,7 @@ function makeEnemy(type,wave){
   const g=new THREE.Group();
   let animator=null, bones=null, model=null, modelScale=1;
   if(MODELS.ok&&MODELS.items[ENEMY_MODEL[type]]){
-    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
+    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); addRim(c.group,ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
     if(HOVER_Y[type])c.group.position.y=HOVER_Y[type];
     bones.flinch=null; for(const b of FLINCH_BONES)if(bones[b]){ bones.flinch=bones[b]; break; }
   } else buildEnemyProcedural(g,type);
@@ -5852,6 +5962,17 @@ function lineOfSight(from,to){
   const dir=_los.copy(to).sub(from); const dist=dir.length(); if(dist<1e-4)return true; dir.multiplyScalar(1/dist);
   return rayWorld(from,dir,dist,0)<0;
 }
+/* value-ladder probes for look.js: a floor point beside the player, the near face of the nearest cover block ahead, the nearest wall face */
+function calPoints(){
+  const p=player.pos, fwd=forwardVec(player.yaw,0); fwd.y=0; fwd.normalize();
+  const floor=p.clone().addScaledVector(fwd,3.2); floor.x+=1.4; floor.y=0.02;
+  let cover=null,cd=1e9,wall=null,wd=1e9;
+  for(const b of boxes){ const h=b.max.y-b.min.y; const c=new THREE.Vector3((b.min.x+b.max.x)/2,0,(b.min.z+b.max.z)/2); const d=c.sub(p); const dist=d.length(); if(dist<1e-3||d.dot(fwd)<dist*0.35)continue;
+    if(h>=1.5&&h<5.5&&dist<24&&dist<cd){ cd=dist; cover=b; } if(h>=5.5&&d.dot(fwd)>dist*0.8&&dist<wd){ wd=dist; wall=b; } }   // the wall ahead, not the one beside
+  const right=new THREE.Vector3().crossVectors(fwd,UP).normalize();
+  const face=(b,y,side)=>{ if(!b)return null; const q=p.clone().addScaledVector(right,side); q.y=Math.min(b.max.y-0.3,b.min.y+y); q.x=Math.max(b.min.x+0.05,Math.min(b.max.x-0.05,q.x)); q.z=Math.max(b.min.z+0.05,Math.min(b.max.z-0.05,q.z)); q.addScaledVector(q.clone().sub(p).setY(0).normalize(),-0.03); return q; };
+  return {floor:floor,cover:face(cover,1.2,0.7),wall:face(wall,3.2,0)};   // cover sampled beside the operative's shadow, wall above the cover line
+}
 
 /* ---- 25-hud-helpers.js ---- */
 /* ============================ HUD helpers ============================ */
@@ -6003,7 +6124,7 @@ function spawnFabricator(spawn){
   const gl=glowSprite(0xffc247,4); gl.position.y=1.5; g.add(gl);
   const lab=makeLabel('FABRICATOR','#ffc247',.7); lab.position.y=2.6; g.add(lab);
   g.position.copy(p); world.add(g);
-  interactables.push({pos:p.clone(),r:2.4,label:'Fabricator 00b7 60 / 120 / 200 scrap',action:openFabricator});
+  interactables.push({pos:p.clone(),r:2.4,label:'Fabricator · 60 / 120 / 200 scrap',action:openFabricator});
   state.fab={pos:p.clone(),g:g};
 }
 function openFabricator(){ if(state.offer||state.mode!=='run')return; state.offer={stage:'fab',sel:0,items:[]}; state.running=false; showFab(); }
@@ -6384,11 +6505,12 @@ function update(dt){
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
 
   /* ---- camera ---- */
-  const camF=forwardInto(_camF,camYaw(),player.pitch+player.recoil);
+  player.lead+=((-inp.r*CAM.lead)-player.lead)*Math.min(1,dt*4);   // small yaw lead toward the direction of travel (camera only)
+  const camF=forwardInto(_camF,camYaw()+player.lead,player.pitch+player.recoil);
   const camR=_camR.crossVectors(camF,UP).normalize();
-  const pivot=_pivot.copy(player.pos); pivot.y+=EYE; pivot.addScaledVector(camR,0.72+0.16*player.aimK);
-  let dist=5.15-1.95*player.aimK;
-  const fov=66-16*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
+  const pivot=_pivot.copy(player.pos); pivot.y+=EYE+CAM.pivotY; pivot.addScaledVector(camR,CAM.shoulder+0.16*player.aimK);
+  let dist=CAM.dist-1.5*player.aimK;
+  const fov=66-CAM.aimFov*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
   crossEl.classList.toggle('free',player.orbit!==0);
   const camHit=rayWorld(pivot,_v1.copy(camF).negate(),dist+0.4,0);   // slab test against boxes[] (no mesh raycast per step)
   if(camHit>=0)dist=Math.max(1.1,camHit-0.35);
@@ -6962,7 +7084,7 @@ loadModels(p=>{ const f=document.getElementById('ldfill'); if(f)f.style.width=(p
 window.__ARENA__={applyLook:applyLook,camYaw:camYaw,barrels:barrels,explodeBarrel:explodeBarrel,addProp:addProp,waveCleared:waveCleared,state:state,player:player,run:run,enemies:enemies,keys:keys,camera:camera,CHARS:CHARS,ITEMS:ITEMS,
   computeStats:computeStats,selectChar:selectChar,giveItem:giveItem,useAbility:useAbility,goLobby:goLobby,goRange:goRange,goRun:goRun,
   startWave:startWave,pickups:pickups,targets:targets,interactables:interactables,perf:perf,Q:Q,setQuality:setQuality,renderer:renderer,toggleDebug:toggleDebug,inp:inp,touch:touch,pad:pad,TOUCH:TOUCH,nav:nav,MAPS:MAPS,buildStage:buildStage,nextStage:nextStage,mapData:mapData,stageMap:stageMap,navPath:navPath,navNearestOpen:navNearestOpen,bossDefeated:bossDefeated,MODELS:MODELS,SETTINGS:SETTINGS,showSettings:showSettings,spawnCharacter:spawnCharacter,GUN_MOUNT:GUN_MOUNT,avatar:avatar,podDisplays:podDisplays,makeEnemy:makeEnemy,avatarAnim:function(){return avatarAnim;},corpses:corpses,
-  timers:timers,after:after,rayWorld:rayWorld,castShot:castShot,hurtPlayer:hurtPlayer,killEnemy:killEnemy,dealDamage:dealDamage,
+  CAM:CAM,RIGS:RIGS,LADDER:LADDER,CHAR_BOOST:CHAR_BOOST,calPoints:calPoints,setTheme:setTheme,applyRig:applyRig,addRim:addRim,MOUNTS:MOUNTS,timers:timers,after:after,rayWorld:rayWorld,castShot:castShot,hurtPlayer:hurtPlayer,killEnemy:killEnemy,dealDamage:dealDamage,
   queueOffer:queueOffer,pickOffer:pickOffer,offerKey:offerKey,closeOffer:closeOffer,openFabricator:openFabricator,fabBuy:fabBuy,scrapPick:scrapPick,rollOffer:rollOffer,addScrap:addScrap,spawnFabricator:spawnFabricator,
   forceStart:function(mode){ state.forced=true; audio(); (mode==='lobby'?goLobby:mode==='range'?goRange:goRun)(); state.running=true; hud.classList.add('on'); screenEl.classList.add('hide'); }};
 })();

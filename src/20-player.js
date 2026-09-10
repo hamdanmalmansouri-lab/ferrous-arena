@@ -2,7 +2,7 @@
 const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
-  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0
+  lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0
 };
 const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null};
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
@@ -34,13 +34,34 @@ let gun=null, flash=null, flashMesh=null;
 /* glTF character + weapon; falls back to the procedural box model when models are unavailable */
 /* weapon mount in the right palm bone's space (metres, before the rig scale is divided out); tuned per mech in MOUNTS */
 const GUN_MOUNT={bone:'WristR',pos:[0,0,0],rot:[0,0,0],scale:0.5};   // Wrist.R (GLTFLoader strips the dot); the Sci-Fi Guns pack is modelled at ~2x the humans' scale
-const MOUNTS={};   // per character id overrides: {bone,pos,rot,scale}
+/* per character overrides: pos = grip offset in the palm bone (metres, before the rig scale), rot = extra Euler (rad) after alignGun */
+const MOUNTS={   // back = metres along the barrel toward the shooter, up = metres along the gun's +Y (both in gun space, after alignGun)
+  vanguard:{pos:[0,0,0],rot:[0,0,0],back:0.04,up:-0.01},
+  ranger:  {pos:[0,0,0],rot:[0,0,0],back:0.30,up:-0.02},
+  bulwark: {pos:[0,0,0],rot:[0,0,0],back:0.02,up:0}
+};
+/* Vanguard palette: dark navy instead of near-black, emissive visor and a chest stripe in the accent blue */
+const VANGUARD_NAVY=0x1c2a4a, VANGUARD_ACCENT=0x4ea8ff;
+function applyVanguardPalette(c){
+  c.group.traverse(o=>{ if(!o.isMesh||o.userData.rim)return; const m=o.material;
+    if(m.name==='Swat'){ m.color.set(VANGUARD_NAVY); charBoost(m); }
+    else if(m.name==='Swat_Black'){ m.color.set(0x0c1424); charBoost(m); }
+    else if(m.name==='Visor'){ m.color.set(VANGUARD_ACCENT); m.emissive.set(VANGUARD_ACCENT); m.emissiveIntensity=1.2; } });
+  const chest=c.bones.Chest||c.bones.Torso; if(!chest)return;
+  c.group.updateMatrixWorld(true);
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.035,0.03),new THREE.MeshBasicMaterial({color:VANGUARD_ACCENT}));
+  const wp=new THREE.Vector3(0,1.31,0.2); chest.worldToLocal(wp); stripe.position.copy(wp);
+  const q=new THREE.Quaternion(); chest.getWorldQuaternion(q); stripe.quaternion.copy(q.invert());
+  chest.add(stripe);
+}
 const CHAR_MODEL={vanguard:'human_swat',ranger:'human_scifi',bulwark:'human_space'};
 const GUN_MODEL={vanguard:'gun_ar',ranger:'gun_sniper',bulwark:'gun_cannon'};
 const AIM_BONES=['Chest','Torso','torso'];   // first present bone gets the aim pitch + flinch
 function buildAvatarModel(ch){
   if(MODELS.ok&&MODELS.items[CHAR_MODEL[ch.id]]){
-    const c=spawnCharacter(CHAR_MODEL[ch.id]); c.group.rotation.y=MODEL_YAW;   // outfits keep their own palette
+    const c=spawnCharacter(CHAR_MODEL[ch.id]);
+    if(ch.id==='vanguard')applyVanguardPalette(c);   // the other outfits keep their own palette
+    addRim(c.group,ch.color); c.group.rotation.y=MODEL_YAW;
     const g=new THREE.Group(); g.add(c.group);
     const gunObj=new THREE.Group(); gunObj.name='gun';
     const gunModel=spawnProp(GUN_MODEL[ch.id],ch.color); const gunAxis=gunBarrel(GUN_MODEL[ch.id]);
@@ -106,6 +127,9 @@ function alignGun(gunObj,palm,c,mt,ax){
   _m4.makeBasis(tx,ty,tz); const qTarget=new THREE.Quaternion().setFromRotationMatrix(_m4);
   gunObj.quaternion.copy(rel.invert().multiply(qTarget));              // local = inv(rel) * target
   gunObj.position.fromArray(mt.pos).divideScalar(c.scale);
+  if(mt.rot&&(mt.rot[0]||mt.rot[1]||mt.rot[2]))gunObj.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(mt.rot[0],mt.rot[1],mt.rot[2])));   // hand-tuned grip correction
+  if(mt.back||mt.up){ const bv=new THREE.Vector3(); bv[ax.axis]=ax.sign; bv.applyQuaternion(gunObj.quaternion); gunObj.position.addScaledVector(bv,-(mt.back||0)/c.scale);
+    const uv=new THREE.Vector3(0,1,0).applyQuaternion(gunObj.quaternion); gunObj.position.addScaledVector(uv,(mt.up||0)/c.scale); }
   if(shoot){ an.mixer.stopAllAction(); }
 }
 /* rig facing: yaw applied to every character instance so the model looks down the game's -Z; GUN_AXIS: the kit guns' barrel direction in model space */

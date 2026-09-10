@@ -31,7 +31,7 @@ function makeEnemy(type,wave){
   const g=new THREE.Group();
   let animator=null, bones=null, model=null, modelScale=1;
   if(MODELS.ok&&MODELS.items[ENEMY_MODEL[type]]){
-    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
+    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); addRim(c.group,ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
     if(HOVER_Y[type])c.group.position.y=HOVER_Y[type];
     bones.flinch=null; for(const b of FLINCH_BONES)if(bones[b]){ bones.flinch=bones[b]; break; }
   } else buildEnemyProcedural(g,type);

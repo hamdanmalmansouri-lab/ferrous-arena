@@ -10,8 +10,8 @@ const path = require('path');
   await page.waitForFunction(() => window.__ARENA__ && __ARENA__.MODELS.ready, { timeout: 90000 }); await page.waitForTimeout(400);
   await page.evaluate(() => { __ARENA__.selectChar(0); __ARENA__.forceStart('range'); });
   await page.waitForTimeout(400);
-  // put the camera line (x = player.x + 0.72) through the centre plate at (0,-14)
-  await page.evaluate(() => { const p = __ARENA__.player; p.pos.set(-0.72, 0, 0); p.yaw = 0; p.pitch = 0.01; __ARENA__.keys.mouse = true; });
+  // put the camera line (x = player.x + 1.05) through the centre plate at (0,-14)
+  await page.evaluate(() => { const p = __ARENA__.player; p.pos.set(-1.05, 0, 0); p.yaw = 0; p.pitch = 0.01; __ARENA__.keys.mouse = true; });
   await page.waitForTimeout(3000);
   await page.evaluate(() => { __ARENA__.keys.mouse = false; });
   let r = await page.evaluate(() => ({ hits: document.getElementById('rgHits').textContent, targets: document.getElementById('rgTargets').textContent, dps: document.getElementById('rgDps').textContent, shots: __ARENA__.state.acc.shots, plateDown: __ARENA__.targets[2].down > 0 }));
@@ -39,7 +39,7 @@ const path = require('path');
   for (let k = 0; k < 20; k++) {
     const left = await page.evaluate(() => {
       const e = __ARENA__.enemies[0]; if (!e) return 0;
-      const p = __ARENA__.player; e.group.position.set(p.pos.x + 0.72, 0, p.pos.z - 6); p.yaw = 0; p.pitch = 0.02;
+      const p = __ARENA__.player; e.group.position.set(p.pos.x + 1.05, 0, p.pos.z - 6); p.yaw = 0; p.pitch = 0.02;
       __ARENA__.keys.mouse = true; return __ARENA__.enemies.length;
     });
     if (!left) break;

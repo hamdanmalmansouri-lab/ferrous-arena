@@ -81,7 +81,7 @@ const path = require('path');
   r.fovReleased = +await page.evaluate(() => __ARENA__.camera.fov.toFixed(1));
   if (!r.free || r.orbit !== -1 || r.yaw !== 0) errors.push('FREELOOK orbit did not take the look delta: ' + JSON.stringify(r));
   if (r.orbitAfterMove !== 0 || r.yawAfterMove !== -1) errors.push('FREELOOK yaw did not snap to the camera on move: ' + JSON.stringify(r));
-  if (r.aimK < 0.9 || r.fov > 52 || !/aim$/.test(r.aimState) || r.fovReleased < 65) errors.push('AIM camera/pose wrong: ' + JSON.stringify(r));
+  if (r.aimK < 0.9 || r.fov > 58 || !/aim$/.test(r.aimState) || r.fovReleased < 65) errors.push('AIM camera/pose wrong: ' + JSON.stringify(r));
   console.log('free look + aim:', JSON.stringify(r));
   // enemies: rusher attack layered over sprint, hit flinch, shake on hurt, LOD for far enemies
   await page.evaluate(() => { const A = __ARENA__; A.state.startDelay = 0.01; });

@@ -76,7 +76,7 @@ function spawnFabricator(spawn){
   const gl=glowSprite(0xffc247,4); gl.position.y=1.5; g.add(gl);
   const lab=makeLabel('FABRICATOR','#ffc247',.7); lab.position.y=2.6; g.add(lab);
   g.position.copy(p); world.add(g);
-  interactables.push({pos:p.clone(),r:2.4,label:'Fabricator 00b7 60 / 120 / 200 scrap',action:openFabricator});
+  interactables.push({pos:p.clone(),r:2.4,label:'Fabricator · 60 / 120 / 200 scrap',action:openFabricator});
   state.fab={pos:p.clone(),g:g};
 }
 function openFabricator(){ if(state.offer||state.mode!=='run')return; state.offer={stage:'fab',sel:0,items:[]}; state.running=false; showFab(); }

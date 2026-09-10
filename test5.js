@@ -28,7 +28,7 @@ const path = require('path');
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'shot-m-enemies.png' });
   // kill one via damage -> corpse plays 'die'
-  const cr = await page.evaluate(() => { const A = __ARENA__; const e = A.enemies[0]; e.hp = 1; const p = A.player; p.pos.copy(e.group.position).add(new THREE.Vector3(-0.72, 0, 5)); A.keys.mouse = true; return A.enemies.length; });
+  const cr = await page.evaluate(() => { const A = __ARENA__; const e = A.enemies[0]; e.hp = 1; const p = A.player; p.pos.copy(e.group.position).add(new THREE.Vector3(-1.05, 0, 5)); A.keys.mouse = true; return A.enemies.length; });
   await page.waitForTimeout(1500);
   await page.evaluate(() => { __ARENA__.keys.mouse = false; });
   r = await page.evaluate(() => ({ before: 0, enemies: __ARENA__.enemies.length, kills: __ARENA__.state.kills }));

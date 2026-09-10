@@ -7,3 +7,4 @@ const MELEE_TOKENS=3;             // chasers allowed in the attack state at once
 const timers=[];
 function after(t,fn){ timers.push({t:t,fn:fn}); }
 function tickTimers(dt){ for(let i=timers.length-1;i>=0;i--){ const tm=timers[i]; if(!tm)continue; tm.t-=dt; if(tm.t<=0){ timers.splice(i,1); tm.fn(); } } }
+const CAM={shoulder:1.05,dist:4.4,pivotY:0.15,aimFov:10,lead:4*Math.PI/180};   // over-the-shoulder camera; lead = yaw toward the direction of travel

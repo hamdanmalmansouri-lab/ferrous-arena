@@ -42,7 +42,7 @@ const path = require('path');
   // go to range and hold FIRE
   await page.evaluate(() => __ARENA__.goRange());
   await page.waitForTimeout(300);
-  await page.evaluate(() => { const p = __ARENA__.player; p.pos.set(-0.72, 0, 0); p.yaw = 0; p.pitch = 0.01; });
+  await page.evaluate(() => { const p = __ARENA__.player; p.pos.set(-1.05, 0, 0); p.yaw = 0; p.pitch = 0.01; });
   await pe('pointerdown', 'tFire', 3, 830, 300);
   await page.waitForTimeout(1500);
   await pe('pointerup', 'tFire', 3, 830, 300);

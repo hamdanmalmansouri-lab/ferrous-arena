@@ -3,7 +3,7 @@
 The single backlog for the game, split by sector and tagged so several Claude Code sessions can work in parallel.
 `ROADMAP.md` is the phase history (what shipped when); `HANDOFF.md` is the code map. **This file is the to-do list.**
 
-Current build: **v3.0.0-p2** (10 Sep 2026) — v3.0 "Meltdown" pass in progress (see the V3 table below). v2.8.0 (8 Sep 2026): Quaternius cast, UAL jump + reload, free look + RMB aim, kit props merged into the world, explosive barrels.
+Current build: **v3.0.0-p3** (10 Sep 2026) — v3.0 "Meltdown" pass in progress (see the V3 table below). v2.8.0 (8 Sep 2026): Quaternius cast, UAL jump + reload, free look + RMB aim, kit props merged into the world, explosive barrels.
 
 ## V3 — "Meltdown" pass (one-shot prompt, 10 Sep 2026)
 
@@ -13,7 +13,7 @@ Seven phases, each a clean cut with its own gate and commit. Rows here are ticke
 |---|---|---|
 | **V3-P1** `[x]` v3.0.0-p1 | **Correctness.** Muzzle-origin two-stage fire trace; player i-frames 0.35 s + melee token pool (3); lifesteal overkill clamp; omnidirectional sprint (0.8×); CDR floor 0.45; Barrier = 45 % max HP; cached cast list + slab-test world/camera/LOS rays; `timers[]` replaces every gameplay `setTimeout`; build syntax-checks before writing, `<title>` in `<head>`; three.js vendored into `site/` (SW precache, no CDN; standalone inlines it); Warden subtitle from `mk` flags; hurt pop on the model child; per-pellet accuracy; hostiles = on-field + queued; generated HTML untracked. Gate suite `test7.js`. | done |
 | **V3-P2** `[x]` v3.0.0-p2 | **Roguelite loop.** Every item is a pick of 1 from 3 (paused card: 1/2/3 keys, tap targets, D-pad + A); `tier` common/rare/legendary at 70/25/5 drives the roll, codex grouping and chip borders (+2 legendaries so the tier exists); scrap credited per kill (Rusher 3 / Lancer 5 / Elite 12 / Warden 60) and a Fabricator per stage (60 offer / 120 rare offer / 200 reroll a held stack); enemy HP `(34+8w)(1+0.018w)`, melee/projectile growth capped at wave 22; wave break 2.5 s on a sub-20 s clear, 4.5 s otherwise, 6 s after a Warden; `REGEN_RATE` 4. Gate suite `test8.js`. | done |
-| **V3-P3** `[ ]` | **Art foundation.** Per-map light rig + sky, value ladder, rim pass, Vanguard palette, weapon mounts, camera retune. (absorbs MAP-06) | |
+| **V3-P3** `[x]` v3.0.0-p3 | **Art foundation.** `setTheme(rig)` → `applyRig` (sun / rim / hemisphere / exposure / fog per map: Foundry sodium key + cold fill, Relay neutral high key, Frost flat overcast + heavy fog, Reactor near-black + magenta rim); `buildSky(stops, stars, silhouette)` with one unlit extruded band per map (stacks / masts / ridge / towers); `LADDER` albedos calibrated so the gameplay view lands floor 0.10 / cover 0.21 (walls derived at 0.32) sRGB, operatives ~0.45–0.55 via `CHAR_BOOST` self-light; `addRim` inflated back-face additive shell on every character (bind-matrix inflation on skinned meshes, off on low); Vanguard navy + emissive visor + chest stripe; `MOUNTS` with barrel-axis `back`/`up` per operative; camera shoulder 1.05, dist 4.4, pivot +0.15, aim FOV delta 10, 4° yaw lead. `look.js` now shoots every map + sky and prints the ladder. | done |
 | **V3-P4** `[ ]` | **Game feel.** Damage numbers, hit-stop, dissolve deaths, muzzle/impact, HUD system, lobby overhaul. (absorbs ART-01, ART-03, MAP-05, ANIM-07) | |
 | **V3-P5** `[ ]` | **Evolutions.** Forge Cores, ten item evolutions, operative ascensions. (absorbs GP-07) | |
 | **V3-P6** `[ ]` | **Meltdown Protocol.** Director mode, reactor charge, Core Shards, extraction win, scoring + score code, Trials. (absorbs GP-10) | |
@@ -60,7 +60,7 @@ Sizes: **S** = one focused session, **M** = 2–3 sessions, **L** = multi-sessio
 | **MAP-03** `[ ]` | **Fifth map — "Hangar".** Long hall, two rows of crate stacks as lanes, a raised gantry at one end (stairs), rolling shutter that opens mid-wave to release a Rusher pack. | M | `19b-maps`, `test4` | Nav trace passes like the other maps; shutter releases enemies. |
 | **MAP-04** `[ ]` | **Per-map boss arenas.** Boss waves clear the central cover and raise a ring wall so the Warden fight is a defined arena on every map. | S | `28-waves`, `19b-maps` | Arena builds on wave 5 and reverts on the next wave. |
 | **MAP-05** `[ ]` | **Lobby overhaul.** Consoles that open Settings / Codex in-world (interactables), a trophy wall for best wave/stage, the operative pods get a floor plate with the ability icon. | S | `19-world` (lobby), `35-screens` | Both consoles open their screens via E. |
-| **MAP-06** `[ ]` | **Skyboxes per map.** Cheap: gradient dome + star density + one silhouette band (foundry stacks, relay masts, frost ridge, reactor towers). | S | `18-renderer-scene`, `19b-maps` | Each map's screenshot shows its band; no external textures. |
+| **MAP-06** `[x]` v3.0.0-p3 (V3-P3) | **Skyboxes per map.** Cheap: gradient dome + star density + one silhouette band (foundry stacks, relay masts, frost ridge, reactor towers). | S | `18-renderer-scene`, `19b-maps` | Each map's screenshot shows its band; no external textures. |
 
 ## ANIM — Animation
 
