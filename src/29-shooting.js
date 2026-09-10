@@ -7,6 +7,7 @@ function dealDamage(e,dmg,point,head,crit){
   if(state.mode==='range'){ rangeStats.dmgLog.push({t:state.t,v:dmg}); rangeStats.hits++; }
   if(run.stats.lifesteal>0&&state.mode==='run'){ player.hp=Math.min(run.stats.maxHp,player.hp+healBase*run.stats.lifesteal); }
   spark(point,crit?0xffd166:head?0xffe08a:0xff6a4d,head||crit?11:6);
+  dmgNumber(point,dmg,crit?'crit':head?'head':'hit');
   if(crit)SFX.crit(); else if(head)SFX.head(); else SFX.hit();
   if(e.hp<=0){ killEnemy(e,head); popHit(true); } else popHit(false,crit);
 }
@@ -35,7 +36,8 @@ function tryFire(){
   player.mag--; player.fireCd=s.fireT/(od?1.6:1); state.acc.shots++;
   if(CH().id==='bulwark')SFX.shotHeavy(); else if(CH().id==='ranger')SFX.shotSnipe(); else SFX.shot();
   player.recoil=Math.min(player.recoil+s.recoil,0.16); player.aimT=2.5; player.kick=Math.min(1,player.kick*0.5+(CH().id==='bulwark'?1:CH().id==='ranger'?0.85:0.6));
-  flash.intensity=3.2; flashMesh.material.opacity=.9;
+  flash.intensity=3.2; flashMat.opacity=.9; if(flashMat.isSpriteMaterial)flashMat.rotation=Math.random()*6.28; else flashMesh.rotation.x=Math.random()*6.28;
+  const fx=WEAPON_FX[CH().id]||WEAPON_FX.vanguard;
   crossEl.classList.add('wide'); player.crossT=0.11;
 
   const muzzle=_mz; flashMesh.getWorldPosition(muzzle);
@@ -67,8 +69,8 @@ function tryFire(){
         rangeStats.dmgLog.push({t:state.t,v:s.dmg*(Math.random()<s.crit?2:1)});
         tg.down=2.2; spark(endPoint,0xffd166,8); SFX.head(); popHit(false,true);
       }else spark(endPoint,0x9fb4cc,3);
-    }else if(h.world)spark(endPoint,0x9fb4cc,3);
-    if(p<4)tracer(muzzle,endPoint);
+    }else if(h.world){ spark(endPoint,0x9fb4cc,3); decal(endPoint,worldHitNormal(endPoint,_v2)); }
+    if(p<4)tracer(muzzle,endPoint,fx.tracer,fx.color);
   }
   state.acc.shots+=s.pellets-1; state.acc.hits+=pelletHits;   // accuracy counts every pellet (shots++ above counted the trigger pull)
   if(player.mag===0)startReload();
@@ -80,6 +82,7 @@ function killEnemy(e,head){
     spark(e.group.position.clone().setY(1.1),0x9fb4cc,12); SFX.kill();
     removeEnemy(e,true); after(2,()=>{ if(state.mode==='range')spawnDummy(); }); return;
   }
+  state.hitStop=Math.max(state.hitStop,e.type==='boss'?0.14:0.06); state.impactFrames++;   // hit-stop: the simulation slows for 60 ms (140 ms on a Warden); rendering never pauses
   const pts=(e.type==='boss'?1500:e.type==='shooter'?170:110)*(head?2:1);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
@@ -91,7 +94,7 @@ function killEnemy(e,head){
     SFX.kill();
     spark(e.group.position.clone().setY(1.1),e.type==='shooter'?0xd07bff:0xff7a4d,16);
     const sc=SCRAP_VALUE[e.elite?'elite':e.type]||0; addScrap(sc,e.group.position.clone().setY(1.2));
-    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>'+(sc?' &middot; '+sc+' scrap':''));
+    say((head?'<b>HEADSHOT</b> ':'')+ENEMY_NAME[e.type]+' down <b>+'+pts+'</b>'+(sc?' <span class="scrap">&middot; '+sc+' scrap</span>':''));
     const r=Math.random();
     if(r<0.06)dropPickup(e.group.position,'item'); else if(r<0.22&&!state.mods.norepair)dropPickup(e.group.position,'heal');
   }

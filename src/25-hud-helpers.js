@@ -2,7 +2,7 @@
 function say(txt,cls){
   const s=document.createElement('span'); s.innerHTML=txt; if(cls)s.className=cls; feed.appendChild(s);
   setTimeout(()=>s.remove(),3000);
-  while(feed.children.length>5)feed.firstChild.remove();
+  while(feed.children.length>2)feed.firstChild.remove();   // two lines, bottom-centre
 }
 function showBanner(t,s,gold){ bnT.textContent=t; bnS.textContent=s; banner.classList.toggle('gold',!!gold);
   banner.classList.remove('show'); void banner.offsetWidth; banner.classList.add('show'); }
@@ -17,10 +17,8 @@ function syncItems(){
 }
 function syncHUD(){
   const s=run.stats;
-  uiWave.textContent=state.wave; uiStage.textContent=state.stage;
-  uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue;
-  uiScore.textContent=state.score.toLocaleString(); uiScrap.textContent=state.scrap;
-  uiKills.textContent=state.kills;
+  uiWave.textContent=Math.max(1,state.wave);
+  uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue>0?' +'+state.spawnQueue:''; uiScrap.textContent=state.scrap;
   const nb=state.wave>0?(BOSS_EVERY-(state.wave%BOSS_EVERY))%BOSS_EVERY:BOSS_EVERY;
   uiBossIn.textContent=state.boss?'NOW':(nb===0?BOSS_EVERY:nb);
   const hp=Math.max(0,Math.round(player.hp));
@@ -30,7 +28,7 @@ function syncHUD(){
   lowvig.style.opacity=(state.mode==='run'&&hp/s.maxHp<=.35)?(1-hp/s.maxHp/.35)*0.85:0;
   uiMag.textContent=player.mag;
   uiMag.classList.toggle('empty',player.mag===0);
-  uiAmmoLbl.textContent=player.reloading>0?'Reloading':(player.mag+' / '+s.mag+(CH().id==='bulwark'?' shells':' mag'));
+  uiAmmoLbl.textContent=player.reloading>0?'Reloading':('/ '+s.mag+(CH().id==='bulwark'?' shells':' mag'));
   uiChar.textContent=CH().name; lbChar.textContent=CH().name+' — '+CH().role;
   /* ability */
   const ab=CH().ability;

@@ -29,8 +29,26 @@ function computeStats(){
 computeStats();
 
 /* avatar: rebuilt on character select */
+/* per-weapon fire effects: muzzle sprite kind, tracer width + colour, flash scale */
+const WEAPON_FX={
+  vanguard:{flash:'star', size:0.9, tracer:0.035,color:0xbfe0ff},
+  ranger:  {flash:'lance',size:1.6, tracer:0.06, color:0x9fffd0},
+  bulwark: {flash:'bloom',size:1.4, tracer:0.022,color:0xffb27a}
+};
+const FLASH_TEX={};
+function flashTex(kind){
+  if(FLASH_TEX[kind])return FLASH_TEX[kind];
+  const cv=document.createElement('canvas'); cv.width=cv.height=128; const c=cv.getContext('2d'); c.clearRect(0,0,128,128);
+  const core=(r,a0)=>{ const g=c.createRadialGradient(64,64,0,64,64,r); g.addColorStop(0,'rgba(255,255,255,'+a0+')'); g.addColorStop(.3,'rgba(255,230,180,'+(a0*.7)+')'); g.addColorStop(1,'rgba(255,170,80,0)'); c.fillStyle=g; c.fillRect(0,0,128,128); };
+  if(kind==='star'){ core(28,1); c.strokeStyle='rgba(255,235,200,.9)'; c.lineWidth=3; for(let k=0;k<4;k++){ const a=k*Math.PI/2+Math.PI/4, L=k%2?58:40; c.beginPath(); c.moveTo(64-Math.cos(a)*L,64-Math.sin(a)*L); c.lineTo(64+Math.cos(a)*L,64+Math.sin(a)*L); c.stroke(); } }
+  else if(kind==='lance'){ const g=c.createLinearGradient(0,64,128,64); g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(.5,'rgba(220,255,240,1)'); g.addColorStop(1,'rgba(160,255,210,0)'); c.fillStyle=g; c.fillRect(0,56,128,16); core(22,.9); }
+  else { core(62,1); }
+  const t=new THREE.CanvasTexture(cv); return FLASH_TEX[kind]=t;
+}
+
+
 const avatar=new THREE.Group(); scene.add(avatar);
-let gun=null, flash=null, flashMesh=null;
+let gun=null, flash=null, flashMesh=null, flashMat=null;
 /* glTF character + weapon; falls back to the procedural box model when models are unavailable */
 /* weapon mount in the right palm bone's space (metres, before the rig scale is divided out); tuned per mech in MOUNTS */
 const GUN_MOUNT={bone:'WristR',pos:[0,0,0],rot:[0,0,0],scale:0.5};   // Wrist.R (GLTFLoader strips the dot); the Sci-Fi Guns pack is modelled at ~2x the humans' scale
@@ -141,10 +159,20 @@ function rebuildAvatar(){
   gun=avatar.getObjectByName('gun'); avatarAnim=m.userData.animator||null; avatarBones=m.userData.bones||null;
   avatarAimBone=null; if(avatarBones)for(const b of AIM_BONES)if(avatarBones[b]){ avatarAimBone=avatarBones[b]; break; }
   flash=new THREE.PointLight(0xffd08a,0,7,2); flash.position.set(0,1.3,-1.1); avatar.add(flash);
-  flashMesh=new THREE.Mesh(new THREE.SphereGeometry(.13,8,6),new THREE.MeshBasicMaterial({color:0xffd9a0,transparent:true,opacity:0}));
+  /* per-weapon muzzle flash: rifle star / sniper lance / cannon bloom — a sprite (star, bloom) or two crossed planes along the barrel (lance) */
+  const fx=WEAPON_FX[CH().id]||WEAPON_FX.vanguard;
+  flashMat=fx.flash==='lance'
+    ?new THREE.MeshBasicMaterial({map:flashTex('lance'),color:0xd0ffe8,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+    :new THREE.SpriteMaterial({map:flashTex(fx.flash),color:fx.flash==='bloom'?0xffc080:0xffd9a0,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+  if(fx.flash==='lance'){ flashMesh=new THREE.Group(); const ax=gun&&gun.userData.kick?gun.userData.kick.axis:GUN_AXIS;
+    for(let k=0;k<2;k++){ const pl=new THREE.Mesh(new THREE.PlaneGeometry(fx.size,fx.size*0.32),flashMat); if(k)pl.rotation.x=Math.PI/2;   // long axis of the plane = X: point it down the barrel
+      const wrap=new THREE.Object3D(); wrap.add(pl); if(ax.axis==='z')wrap.rotation.y=Math.PI/2; pl.position.x=(ax.sign>0?1:-1)*fx.size*0.45*(ax.axis==='x'?1:0); flashMesh.add(wrap); } }
+  else { flashMesh=new THREE.Sprite(flashMat); flashMesh.scale.set(fx.size,fx.size,1); }
+  flashMesh.renderOrder=3;
   const muz=avatar.getObjectByName('muzzle');
   if(muz){ muz.add(flashMesh); flashMesh.position.set(0,0,0); }
   else { flashMesh.position.set(m.userData.tw*.61,1.28,m.userData.muzzleZ); avatar.add(flashMesh); }
+  if(muz){ const ws=new THREE.Vector3(); muz.getWorldScale(ws); const inv=1/Math.max(1e-4,ws.x); if(flashMesh.isSprite)flashMesh.scale.set(fx.size*inv,fx.size*inv,1); else flashMesh.scale.setScalar(inv); }   // the mount carries the gun scale: cancel it so the flash is sized in metres
   if(avatarAnim)avatarAnim.play('idle',0);
   shieldMesh.visible=false; avatar.add(shieldMesh);
 }

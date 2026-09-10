@@ -80,7 +80,10 @@ function finishEnemy(g,type,wave,animator,bones,model,modelScale){
   return e;
 }
 function removeEnemy(e,keepCorpse){
-  if(keepCorpse&&e.animator&&e.animator.actions.die){ e.hitBoxes.forEach(h=>e.group.remove(h)); e.animator.play('die',0.08,true); corpses.push({g:e.group,an:e.animator,t:Math.min(2.6,e.animator.actions.die.getClip().duration+0.4)}); }
+  if(keepCorpse&&e.animator&&e.animator.actions.die){ e.hitBoxes.forEach(h=>e.group.remove(h)); e.animator.play('die',0.08,true);
+    const mats=[],rims=[]; e.group.traverse(o=>{ if(!o.isMesh||!o.material)return; if(o.userData.rim){ rims.push(o.material); return; }
+      const m=o.material; if(m.emissive){ if(m.emissive.getHex()===0)m.emissive.set(ENEMY_TINT[e.type]||0xffffff); m.userData.e0=m.emissiveIntensity||0; mats.push(m); } });
+    corpses.push({g:e.group,an:e.animator,t:Math.max(1.2,Math.min(2.6,e.animator.actions.die.getClip().duration+0.4)),size:e.size,y0:e.group.position.y,mats:mats,rims:rims}); }
   else scene.remove(e.group);
   for(let i=enemyHitMeshes.length-1;i>=0;i--)
     if(enemyHitMeshes[i].userData.enemy===e)enemyHitMeshes.splice(i,1);

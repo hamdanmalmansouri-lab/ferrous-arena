@@ -50,10 +50,11 @@ function rayAABB(o,d,b,tFar){
   return t0;
 }
 /* nearest world hit (boxes[] + the y=0 floor) along a ray, ignoring anything nearer than tNear. Returns the distance or -1. */
+let rayWorldHit=-1;   // index into boxes[] of the last rayWorld hit, -1 = the floor / nothing
 function rayWorld(o,d,tFar,tNear){
-  let best=tFar; tNear=tNear>0?tNear:0;
-  for(let i=0;i<boxes.length;i++){ const t=rayAABB(o,d,boxes[i],best); if(t>=tNear&&t<best)best=t; }
-  if(d.y<-1e-6){ const t=-o.y/d.y; if(t>=tNear&&t<best)best=t; }
+  let best=tFar; tNear=tNear>0?tNear:0; rayWorldHit=-1;
+  for(let i=0;i<boxes.length;i++){ const t=rayAABB(o,d,boxes[i],best); if(t>=tNear&&t<best){ best=t; rayWorldHit=i; } }
+  if(d.y<-1e-6){ const t=-o.y/d.y; if(t>=tNear&&t<best){ best=t; rayWorldHit=-1; } }
   return best<tFar?best:-1;
 }
 const _los=new THREE.Vector3();

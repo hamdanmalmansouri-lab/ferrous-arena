@@ -54,6 +54,12 @@ function addBlock(x,y,z,w,h,d,color,rough){
   boxes.push({min:new THREE.Vector3(x-w/2,y,z-d/2),max:new THREE.Vector3(x+w/2,y+h,z+d/2)});
   return null;
 }
+/* decor block: merged like addBlock but with no collision box (backdrops, corridor frames) */
+function addDecor(x,y,z,w,h,d,color,rough){
+  const r=rough===undefined?.85:rough, key=color+'|'+r;
+  const mtx=new THREE.Matrix4().compose(new THREE.Vector3(x,y+h/2,z),new THREE.Quaternion(),new THREE.Vector3(w,h,d));
+  (pendingBlocks[key]||(pendingBlocks[key]=[])).push({geo:BOX_GEO,matrix:mtx});
+}
 /* ---- kit props as set dressing: merged into one mesh per texture sheet (no per-prop draw calls), optional collision ----
    addProp(id, x, z, rotDeg, height, solid, y): scaled so the model's raw height hits `height`, feet at y (default 0). */
 let pendingProps={};                    // material key -> {mat, parts}
@@ -163,6 +169,7 @@ function clearWorld(){
   pickups.forEach(p=>scene.remove(p.g)); pickups.length=0;
   sparks.forEach(s=>{s.m.visible=false;}); sparks.length=0;
   tracers.forEach(t=>{t.line.visible=false;}); tracers.length=0;
+  decals.forEach(d=>{d.m.visible=false;}); decals.length=0; dmgNums.forEach(d=>{d.sp.visible=false;}); dmgNums.length=0;
   feed.innerHTML='';
 }
 
@@ -207,9 +214,13 @@ const podDisplays=[];
 function buildLobby(){
   ARENA=16;
   const L=LADDER.lobby; addFloor(ARENA,L.floor,0x2f4f7a);
-  addWalls(ARENA,L.wall);
-  setTheme({fogColor:0x090c14}); buildSky(SKY_DEFAULT,420,null);
-  /* character pods along the back wall */
+  /* three walls; the back opens onto a receding hangar corridor (a backdrop with depth and a vanishing point), closed by an invisible collider */
+  const WH=6,T=1.2,half=ARENA;
+  addBlock(0,0,half,half*2+T*2,WH,T,L.wall); addBlock(half,0,0,T,WH,half*2+T*2,L.wall); addBlock(-half,0,0,T,WH,half*2+T*2,L.wall);
+  boxes.push({min:new THREE.Vector3(-half-T,0,-half-T/2),max:new THREE.Vector3(half+T,WH,-half+T/2)});
+  buildLobbyBackdrop();
+  setTheme({fogColor:0x090c14,fogFar:90}); buildSky(SKY_DEFAULT,420,null);
+  /* character pods along the back, each with its own three-point rig and an in-world stat card */
   podDisplays.length=0;
   CHARS.forEach((ch,i)=>{
     const x=(i-1)*6.5, z=-10;
@@ -218,17 +229,19 @@ function buildLobby(){
     boxes.push({min:new THREE.Vector3(x-1.5,0,z-1.5),max:new THREE.Vector3(x+1.5,.5,z+1.5)});
     const ring=new THREE.Mesh(new THREE.TorusGeometry(1.75,.07,8,40),new THREE.MeshBasicMaterial({color:ch.color}));
     ring.rotation.x=Math.PI/2; ring.position.set(x,.52,z); world.add(ring);
-    const disp=buildAvatarModel(ch); disp.position.set(x,.5,z); world.add(disp); spinners.push({obj:disp,speed:.5,axis:'y'});
+    const disp=buildAvatarModel(ch); disp.position.set(x,.5,z); disp.rotation.y=Math.PI; world.add(disp);   // faces the spawn; the selected pod turns slowly
+    const spin={obj:disp,speed:0,axis:'y'}; spinners.push(spin);
     if(disp.userData.animator)disp.userData.animator.play('idle',0);
-    const l=new THREE.PointLight(ch.color,1.2,8,2); l.position.set(x,3.2,z); world.add(l);
+    const key=new THREE.PointLight(0xfff1dc,1.3,8,2); key.position.set(x+1.2,3.6,z+2.4); world.add(key);          // warm key, front-high
+    const rimL=new THREE.PointLight(ch.color,1.8,7,2); rimL.position.set(x-0.6,3.0,z-1.9); world.add(rimL);        // accent rim, behind
+    if(Q.tier!=='low'){ const fill=new THREE.PointLight(0x8fb4ff,0.55,9,2); fill.position.set(x-2.2,1.6,z+1.6); world.add(fill); }   // soft cool fill
     const lab=makeLabel(ch.name.toUpperCase(),ch.css,.8); lab.position.set(x,3.4,z); world.add(lab);
-    const sub=makeLabel(ch.role,'#8fa2bd',.5); sub.position.set(x,2.85,z); world.add(sub);
-    podDisplays.push({ring:ring,idx:i,obj:disp,anim:disp.userData.animator||null,head:disp.userData.bones?(disp.userData.bones.Head||disp.userData.bones.head||null):null});
+    const card=makeCard(ch); card.position.set(x+2.9,1.55,z+0.4); card.rotation.y=-0.5; world.add(card);   // every card to the right of its pod, angled toward the spawn
+    podDisplays.push({ring:ring,idx:i,obj:disp,spin:spin,anim:disp.userData.animator||null,head:disp.userData.bones?(disp.userData.bones.Head||disp.userData.bones.head||null):null});
     interactables.push({pos:new THREE.Vector3(x,0,z),r:2.6,label:'Select '+ch.name,action:()=>selectChar(i,true)});
   });
-  /* back wall panel */
-  addBlock(0,0,-14.5,22,4.5,.6,L.cover);
-  const title=makeLabel('FERROUS ARENA','#4ea8ff',1.6); title.position.set(0,5.4,-14); world.add(title);
+  /* extruded, bevelled title over the corridor mouth */
+  const title=buildTitle('FERROUS ARENA'); title.position.set(0,5.4,-15.2); world.add(title);
   /* portals */
   addPortal(-11,3,0x3ddc84,'Shooting Range',()=>goRange());
   addPortal( 11,3,0x4ea8ff,'Deploy',()=>goRun());
@@ -238,9 +251,53 @@ function buildLobby(){
   else [[-13,-12],[13,-12],[-5,11],[6,12],[0,13.5]].forEach((p,i)=>addBlock(p[0],0,p[1],1.6,1.2+(i%2)*.6,1.6,i%2?L.coverA:L.coverB));
   finalizeWorld(); updatePodRings();
 }
+/* hangar corridor behind the pods: six shrinking frames with a lit lintel line, a narrowing floor and a glow at the vanishing point */
+function buildLobbyBackdrop(){
+  const frames=[[-16.6,26,9],[-21,21,7.6],[-27,16.5,6.2],[-34,12.5,5],[-42,9,3.8],[-51,6,2.7]];
+  frames.forEach((f,i)=>{ const z=f[0],w=f[1],h=f[2],t=0.5,dark=i%2?0x0d121a:0x111925;
+    addDecor(0,h,z,w,t,t,dark); addDecor(0,0,z,w,t,t,dark); addDecor(-w/2,0,z,t,h+t,t,dark); addDecor(w/2,0,z,t,h+t,t,dark);
+    const strip=new THREE.Mesh(new THREE.BoxGeometry(w-0.8,0.07,0.07),basicMat(i%2?0x1d3f6b:0x4ea8ff)); strip.position.set(0,h-0.32,z+t/2+0.05); world.add(strip);
+    const gl=glowSprite(0x4ea8ff,1.2+(5-i)*0.45); gl.position.set(0,h*0.55,z); world.add(gl); });
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(new Float32Array([-13,0.01,-16,13,0.01,-16,3,0.01,-60,-3,0.01,-60]),3)); g.setIndex([0,2,1,0,3,2]); g.computeVertexNormals();
+  const floor=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x0b0f16,roughness:.95,side:THREE.DoubleSide})); floor.receiveShadow=true; floor.userData.disposable=true; world.add(floor);
+  const end=glowSprite(0x4ea8ff,7); end.position.set(0,2.2,-60); world.add(end);
+}
+/* title: canvas text sampled into an extruded cell grid (the body) with a smaller emissive cap per cell (the bevel), each merged into one mesh */
+function buildTitle(text){
+  const cv=document.createElement('canvas'); cv.width=640; cv.height=96; const c=cv.getContext('2d');
+  c.font='900 78px Inter, system-ui, sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillStyle='#fff'; c.fillText(text,320,48);
+  const d=c.getImageData(0,0,640,96).data, STEP=5, CELL=0.09, body=[], face=[];
+  for(let y=0;y<96;y+=STEP)for(let x=0;x<640;x+=STEP){ if(d[(y*640+x)*4+3]<128)continue;
+    const wx=(x/STEP-64+0.5)*CELL, wy=-(y/STEP-9.6+0.5)*CELL;
+    body.push({geo:BOX_GEO,matrix:new THREE.Matrix4().compose(new THREE.Vector3(wx,wy,-0.17),new THREE.Quaternion(),new THREE.Vector3(CELL,CELL,0.34))});
+    face.push({geo:BOX_GEO,matrix:new THREE.Matrix4().compose(new THREE.Vector3(wx,wy,0.03),new THREE.Quaternion(),new THREE.Vector3(CELL*0.7,CELL*0.7,0.06))}); }
+  const g=new THREE.Group();
+  if(body.length){ const bm=new THREE.Mesh(mergeGeos(body),new THREE.MeshStandardMaterial({color:0x1a2a44,roughness:.45,metalness:.6})); bm.castShadow=true; bm.userData.disposable=true; g.add(bm);
+    const fm=new THREE.Mesh(mergeGeos(face),new THREE.MeshStandardMaterial({color:0x2a5fa0,emissive:0x4ea8ff,emissiveIntensity:1.1,roughness:.4})); fm.userData.disposable=true; g.add(fm); }
+  return g;
+}
+/* in-world stat + ability card: an unlit canvas plane */
+function makeCard(ch){
+  const cv=document.createElement('canvas'); cv.width=512; cv.height=352; const c=cv.getContext('2d');
+  const rr=(x,y,w,h,r)=>{ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); };
+  rr(2,2,508,348,26); c.fillStyle='rgba(10,13,20,.86)'; c.fill(); c.lineWidth=3; c.strokeStyle='rgba(120,160,220,.4)'; c.stroke();
+  c.textAlign='left'; c.textBaseline='alphabetic';
+  c.fillStyle=ch.css; c.font='800 46px Inter, system-ui, sans-serif'; c.fillText(ch.name.toUpperCase(),30,64);
+  c.fillStyle='#8fa2bd'; c.font='600 22px Inter, system-ui, sans-serif'; c.fillText(ch.role.toUpperCase(),30,98);
+  const b=ch.base, cols=[['HEALTH',b.hp],['SPEED',b.speed],['DAMAGE',b.dmg+(b.pellets>1?'x'+b.pellets:'')],['MAG',b.mag]];
+  cols.forEach((k,i)=>{ const x=30+i*118; c.fillStyle='#8fa2bd'; c.font='600 17px Inter, system-ui, sans-serif'; c.fillText(k[0],x,146); c.fillStyle='#e8eef8'; c.font='700 34px Inter, system-ui, sans-serif'; c.fillText(String(k[1]),x,184); });
+  c.fillStyle=ch.css; c.font='700 27px Inter, system-ui, sans-serif'; c.fillText(ch.ability.name+'  \u00b7  Q',30,246);
+  c.fillStyle='#c9d4e6'; c.font='400 21px Inter, system-ui, sans-serif';
+  const words=ch.ability.desc.split(' '); let line='', y=282; for(const w of words){ const t=line?line+' '+w:w; if(c.measureText(t).width>452){ c.fillText(line,30,y); y+=28; line=w; } else line=t; } if(line)c.fillText(line,30,y);
+  const tex=new THREE.CanvasTexture(cv);
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.79),new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+  m.userData.disposable=true; return m;
+}
 function updatePodRings(emote){
-  podDisplays.forEach(p=>{ p.ring.material.color.set(p.idx===run.charIdx?0xffffff:CHARS[p.idx].color); p.ring.scale.setScalar(p.idx===run.charIdx?1.15:1);
-    if(emote&&p.anim&&p.idx===run.charIdx)p.anim.play('emote',0.1,true,1); });   // 'Hello' wave on select
+  podDisplays.forEach(p=>{ const sel=p.idx===run.charIdx; p.ring.material.color.set(sel?0xffffff:CHARS[p.idx].color); p.ring.scale.setScalar(sel?1.15:1);
+    if(p.spin){ p.spin.speed=sel?0.35:0; if(!sel)p.obj.rotation.y=Math.PI; }   // slow turntable on the selected operative, the others face the spawn
+    if(emote&&p.anim&&sel)p.anim.play('emote',0.1,true,1); });   // 'Hello' wave on select
 }
 /* lobby pods: advance idle/emote, return to idle after a one-shot, and turn each head toward the viewer */
 const _podV=new THREE.Vector3();

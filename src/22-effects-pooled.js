@@ -11,19 +11,61 @@ function glowSprite(color,size){
   const s=new THREE.Sprite(m); s.scale.set(size,size,1); return s;
 }
 
-/* tracers: fixed pool of lines, geometry rewritten in place */
+/* tracers: fixed pool of thin additive cylinders (WebGL ignores line widths), width + colour per weapon, fade by width */
 const TRACER_POOL=[]; const TRACER_MAX=48;
-(function(){ for(let i=0;i<TRACER_MAX;i++){
-  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));
-  const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xbfe0ff,transparent:true,opacity:.9}));
-  line.visible=false; line.frustumCulled=false; scene.add(line); TRACER_POOL.push(line);
-} })();
-function tracer(a,b){
-  let line=null; for(const l of TRACER_POOL){ if(!l.visible){line=l;break;} }
-  if(!line){ const t=tracers.shift(); if(!t)return; line=t.line; }
-  const p=line.geometry.attributes.position.array; p[0]=a.x;p[1]=a.y;p[2]=a.z;p[3]=b.x;p[4]=b.y;p[5]=b.z;
-  line.geometry.attributes.position.needsUpdate=true; line.visible=true; line.material.opacity=.9;
-  tracers.push({line:line,t:0.09});
+const TRACER_GEO=new THREE.CylinderGeometry(1,1,1,5,1,true); TRACER_GEO.translate(0,0.5,0);   // unit tube from y=0 to y=1
+const TRACER_MATS={};
+function tracerMat(color){ return TRACER_MATS[color]||(TRACER_MATS[color]=new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false})); }
+(function(){ for(let i=0;i<TRACER_MAX;i++){ const m=new THREE.Mesh(TRACER_GEO,tracerMat(0xbfe0ff)); m.visible=false; m.frustumCulled=false; scene.add(m); TRACER_POOL.push(m); } })();
+const _trD=new THREE.Vector3();
+function tracer(a,b,width,color){
+  let m=null; for(const l of TRACER_POOL){ if(!l.visible){m=l;break;} }
+  if(!m){ const t=tracers.shift(); if(!t)return; m=t.line; }
+  const w=width||0.035; _trD.copy(b).sub(a); const len=_trD.length(); if(len<1e-3)return; _trD.multiplyScalar(1/len);
+  m.position.copy(a); m.quaternion.setFromUnitVectors(UP,_trD); m.scale.set(w,len,w); m.material=tracerMat(color||0xbfe0ff); m.visible=true;
+  tracers.push({line:m,t:0.09,w:w});
+}
+/* ---- damage numbers: 24 pooled canvas sprites (white / gold crit / red headshot), rise and fade over 0.7 s ---- */
+const DMG_MAX=24, DMG_POOL=[], dmgNums=[]; let dmgCursor=0;
+(function(){ for(let i=0;i<DMG_MAX;i++){ const cv=document.createElement('canvas'); cv.width=128; cv.height=64; const tex=new THREE.CanvasTexture(cv);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,depthTest:false})); sp.scale.set(1.1,0.55,1); sp.visible=false; sp.renderOrder=5; scene.add(sp);
+  DMG_POOL.push({sp:sp,cv:cv,ctx:cv.getContext('2d'),tex:tex,t:0,vy:0}); } })();
+function dmgNumber(pos,value,kind){
+  const d=DMG_POOL[dmgCursor]; dmgCursor=(dmgCursor+1)%DMG_MAX;
+  if(d.sp.visible){ const k=dmgNums.indexOf(d); if(k>=0)dmgNums.splice(k,1); }
+  const ctx=d.ctx; ctx.clearRect(0,0,128,64); ctx.font=(kind==='crit'?'800 42px':'700 36px')+' Inter, system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth=7; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.fillStyle=kind==='crit'?'#ffd166':kind==='head'?'#ff5a4d':'#f2f6ff';
+  const txt=String(Math.max(1,Math.round(value))); ctx.strokeText(txt,64,34); ctx.fillText(txt,64,34); d.tex.needsUpdate=true;
+  d.sp.position.copy(pos); d.sp.position.x+=(Math.random()-.5)*0.5; d.sp.position.y+=0.35; d.sp.material.opacity=1; d.sp.visible=true; d.t=0.7; d.vy=1.5;
+  const s=kind==='crit'?1.45:kind==='head'?1.2:1; d.sp.scale.set(1.1*s,0.55*s,1);
+  dmgNums.push(d);
+}
+function tickDmgNumbers(dt){
+  for(let i=dmgNums.length-1;i>=0;i--){ const d=dmgNums[i]; d.t-=dt; d.sp.position.y+=d.vy*dt; d.vy=Math.max(0.3,d.vy-2.4*dt);
+    d.sp.material.opacity=Math.min(1,d.t/0.3); if(d.t<=0){ d.sp.visible=false; dmgNums.splice(i,1); } }
+}
+
+/* ---- impact decals: pooled scorch planes on world hits, oriented to the surface, fade over 8 s ---- */
+const DECAL_MAX=32, DECAL_POOL=[], decals=[]; let decalCursor=0;
+const DECAL_TEX=(function(){ const cv=document.createElement('canvas'); cv.width=cv.height=64; const c=cv.getContext('2d'); const g=c.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(8,6,4,.85)'); g.addColorStop(.45,'rgba(10,8,6,.55)'); g.addColorStop(1,'rgba(0,0,0,0)'); c.fillStyle=g; c.fillRect(0,0,64,64); return new THREE.CanvasTexture(cv); })();
+(function(){ const geo=new THREE.PlaneGeometry(1,1); for(let i=0;i<DECAL_MAX;i++){ const m=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:DECAL_TEX,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
+  m.visible=false; m.frustumCulled=false; m.renderOrder=1; scene.add(m); DECAL_POOL.push(m); } })();
+const _dN=new THREE.Vector3();
+function decal(point,normal){
+  const m=DECAL_POOL[decalCursor]; decalCursor=(decalCursor+1)%DECAL_MAX;
+  if(m.visible){ const k=decals.findIndex(d=>d.m===m); if(k>=0)decals.splice(k,1); }
+  const s=0.28+Math.random()*0.14; m.scale.set(s,s,1); m.position.copy(point).addScaledVector(normal,0.012);
+  m.lookAt(_dN.copy(point).add(normal)); m.rotateZ(Math.random()*6.28); m.material.opacity=1; m.visible=true;
+  decals.push({m:m,t:8});
+}
+function tickDecals(dt){ for(let i=decals.length-1;i>=0;i--){ const d=decals[i]; d.t-=dt; if(d.t<2)d.m.material.opacity=d.t/2; if(d.t<=0){ d.m.visible=false; decals.splice(i,1); } } }
+/* surface normal of the last rayWorld hit (box face nearest the point, or the floor) */
+function worldHitNormal(point,out){
+  const b=rayWorldHit>=0?boxes[rayWorldHit]:null; if(!b){ return out.set(0,1,0); }
+  const dx0=Math.abs(point.x-b.min.x),dx1=Math.abs(point.x-b.max.x),dy0=Math.abs(point.y-b.min.y),dy1=Math.abs(point.y-b.max.y),dz0=Math.abs(point.z-b.min.z),dz1=Math.abs(point.z-b.max.z);
+  const m=Math.min(dx0,dx1,dy0,dy1,dz0,dz1);
+  return m===dx0?out.set(-1,0,0):m===dx1?out.set(1,0,0):m===dy0?out.set(0,-1,0):m===dy1?out.set(0,1,0):m===dz0?out.set(0,0,-1):out.set(0,0,1);
 }
 
 /* sparks: pool of tiny meshes with shared per-colour materials; fade by scale */

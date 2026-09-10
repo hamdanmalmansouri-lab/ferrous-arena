@@ -93,10 +93,14 @@ function update(dt){
     avatar.position.y+=bobAmt*(player.grounded?1:0);
     gun.rotation.x=-player.pitch*0.55-player.kick*0.3;
   }
-  for(let i=corpses.length-1;i>=0;i--){ const c=corpses[i]; c.an.update(dt); c.t-=dt; if(c.t<0.35)c.g.position.y-=dt*2.5; if(c.t<=0){ scene.remove(c.g); corpses.splice(i,1); } }
+  for(let i=corpses.length-1;i>=0;i--){ const c=corpses[i]; c.an.update(dt); c.t-=dt;
+    if(c.t<0.8){ const k=1-Math.max(0,c.t)/0.8;   // dissolve: emissive ramps up, the body shrinks toward its centre, the rim shell flares
+      for(const m of c.mats)m.emissiveIntensity=m.userData.e0+4.5*k; for(const m of c.rims)m.opacity=0.35+0.65*k;
+      c.g.scale.setScalar((c.size||1)*(1-0.92*k)); c.g.position.y=c.y0+0.7*k; }
+    if(c.t<=0){ scene.remove(c.g); corpses.splice(i,1); } }
   tickPods(dt,camera.position);
   flash.intensity*=Math.pow(0.0006,dt);
-  flashMesh.material.opacity*=Math.pow(0.0002,dt);
+  flashMat.opacity*=Math.pow(0.0002,dt);
   if(shieldMesh.visible){ shieldMesh.rotation.y+=dt*1.5; shieldMesh.material.opacity=.18+Math.sin(state.t*8)*.06; }
 
   /* ---- camera ---- */
@@ -246,7 +250,7 @@ function update(dt){
       /* Mk.2+: summon Rushers */
       if(e.mk>=2){ e.summonT-=dt; if(e.summonT<=0){ e.summonT=9; let n=0;
         for(let k=0;k<3&&enemies.length<20;k++){ const a=k/3*Math.PI*2; const r=makeEnemy('chaser',state.wave); r.group.position.copy(g.position).add(new THREE.Vector3(Math.cos(a)*2.2,0,Math.sin(a)*2.2)); r.spawnT=0.45; r.group.scale.setScalar(.2); n++; }
-        if(n){ say('<b>Warden</b> summons reinforcements'); spark(g.position.clone().setY(2),0xffd166,14); } } }
+        if(n){ say('<b>Warden</b> summons reinforcements','warn'); spark(g.position.clone().setY(2),0xffd166,14); } } }
     }
   }
 
@@ -272,7 +276,7 @@ function update(dt){
       if(pu.active){
         pu.r+=13*dt; pu.ring.scale.set(pu.r,pu.r,1);
         const d=Math.hypot(player.pos.x,player.pos.z);
-        if(!pu.hit&&Math.abs(d-pu.r)<0.8){ pu.hit=true; if(player.pos.y-navHeightAt(player.pos.x,player.pos.z)<0.5){ hurtPlayer(14+state.wave*0.6); say('Caught by the <b>shockwave</b>'); shakeCam(0.8,0); } }
+        if(!pu.hit&&Math.abs(d-pu.r)<0.8){ pu.hit=true; if(player.pos.y-navHeightAt(player.pos.x,player.pos.z)<0.5){ hurtPlayer(14+state.wave*0.6); say('Caught by the <b>shockwave</b>','warn'); shakeCam(0.8,0); } }
         if(pu.r>ARENA*1.45){ pu.active=false; pu.ring.visible=false; pu.t=pu.period; pu.warned=false; }
       }
     }
@@ -314,9 +318,10 @@ function update(dt){
 
   /* ---- fx ---- */
   for(let i=tracers.length-1;i>=0;i--){
-    const t=tracers[i]; t.t-=dt; t.line.material.opacity=Math.max(0,t.t/0.09)*0.9;
+    const t=tracers[i]; t.t-=dt; const k=Math.max(0.05,t.t/0.09); t.line.scale.x=t.line.scale.z=t.w*k;
     if(t.t<=0){ t.line.visible=false; tracers.splice(i,1); }
   }
+  tickDmgNumbers(dt); tickDecals(dt);
   for(let i=sparks.length-1;i>=0;i--){
     const sp=sparks[i]; sp.t-=dt;
     sp.v.y-=18*dt; sp.m.position.add(_v1.copy(sp.v).multiplyScalar(dt));
@@ -339,7 +344,8 @@ function frame(now){
   perf.animLod=0;
   if(state.offer&&!state.running)pollOfferPad();
   if(state.running){
-    acc+=dt; let steps=0;
+    let scale=1; if(state.hitStop>0){ state.hitStop-=raw; scale=0.12; }   // hit-stop scales the simulation accumulator only; frames keep rendering
+    acc+=dt*scale; let steps=0;
     while(acc>=STEP&&steps<8){ update(STEP); acc-=STEP; steps++; }
     if(steps===8)acc=0;                  // tab was hidden: drop the backlog instead of spiralling
   }else if(state.mode==='menu'){ /* idle orbit for the menu backdrop */

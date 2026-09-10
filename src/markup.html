@@ -6,20 +6,15 @@
     <div id="hitmark"><b></b><b></b><b></b><b></b></div>
     <div id="dmg"></div>
     <div id="lowvig"></div>
-    <div id="feed"></div>
 
     <div class="panel" id="topbar">
-      <div><div class="k">Wave</div><div class="v acc" id="uiWave">1</div></div>
-      <div><div class="k">Hostiles</div><div class="v"><span id="uiLeft">0</span><small>+<span id="uiQueue">0</span></small></div></div>
-      <div><div class="k">Score</div><div class="v" id="uiScore">0</div></div>
-      <div><div class="k">Scrap</div><div class="v" id="uiScrap" style="color:var(--warn)">0</div></div>
-      <div><div class="k">Next boss</div><div class="v" id="uiBossIn">5</div></div>
-      <div><div class="k">Stage</div><div class="v" id="uiStage">1</div></div>
+      <div><div class="k">Wave</div><div class="v acc" id="uiWave"></div></div>
+      <div><div class="k">Warden in</div><div class="v" id="uiBossIn"></div></div>
     </div>
     <div id="compass"></div>
 
     <div class="panel" id="bossbar">
-      <div class="n"><span id="bossName">Warden</span><span id="bossHp">100%</span></div>
+      <div class="n"><span id="bossName"></span><span id="bossHp"></span></div>
       <div class="bar"><div class="fill" id="bossFill"></div></div>
     </div>
 
@@ -31,31 +26,32 @@
     </div>
 
     <div class="panel" id="lobbytag">
-      <div class="k">Operative</div><div class="v" id="lbChar">Vanguard</div>
+      <div class="k">Operative</div><div class="v" id="lbChar"></div>
       <div class="h"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> swap &nbsp; <kbd>Tab</kbd> roster</div>
     </div>
 
     <div class="panel" id="vitals">
-      <div class="lbl"><span>Integrity</span><b id="uiChar">Vanguard</b></div>
+      <div class="lbl"><span>Integrity</span><b id="uiChar"></b></div>
       <div id="hpbar"><div id="hpfill"></div><div id="shfill"></div></div>
-      <div id="hpnum"><span>Kills <b id="uiKills">0</b></span><span><b id="uiHp">100</b> / <span id="uiMaxHp">100</span></span></div>
+      <div id="hpnum"><span class="hero"><b id="uiHp"></b><small>/ <span id="uiMaxHp"></span></small></span>
+        <span class="stat"><i id="uiScrap">0</i> scrap &middot; <i id="uiLeft">0</i><em id="uiQueue"></em> hostile</span></div>
     </div>
 
     <div class="panel" id="items"></div>
+    <div id="feed"></div>
 
     <div class="panel" id="ability">
       <div class="key" id="abKey"><i id="abFill"></i><span>Q</span></div>
-      <div><div class="n" id="abName">Overdrive</div><div class="d" id="abState">Ready</div></div>
+      <div><div class="n" id="abName"></div><div class="d" id="abState"></div></div>
     </div>
 
     <div class="panel" id="ammo">
-      <div class="big" id="uiMag">30</div>
-      <div class="sub" id="uiAmmoLbl">30 / 30 mag</div>
+      <div class="row"><div class="big" id="uiMag"></div><div class="res" id="uiAmmoLbl"></div></div>
       <div id="reloadbar"><div id="reloadfill"></div></div>
     </div>
 
     <div id="prompt"><kbd>E</kbd><span id="promptTxt"></span></div>
-    <div id="banner"><div class="t" id="bnT">Wave 1</div><div class="s" id="bnS">Incoming</div></div>
+    <div id="banner"><div class="t" id="bnT"></div><div class="s" id="bnS"></div></div>
   </div>
 
   <div id="screen">

@@ -103,7 +103,9 @@ function showPause(){
    '<h1>Paused</h1><div class="tag">'+(isRun?'Systems holding':'Practice range')+'</div>'+
    (isRun?'<div class="tag" style="margin-top:10px">Stage '+state.stage+' · '+stageMap(state.stage).name+(state.mod?' · '+state.mod.name+' — '+state.mod.desc:'')+' · seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
+   '<div><div class="k">Stage</div><div class="v">'+state.stage+'</div></div>'+
    '<div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
+   '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
    '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div>'+
    '<div><div class="k">Scrap</div><div class="v">'+state.scrap+'</div></div></div>'+inventoryHTML():controlsHTML())+
    '<button id="go">Resume</button>'+
@@ -122,6 +124,9 @@ function gameOver(){
    '<div class="tag">'+CH().name+' fell on wave '+state.wave+', stage '+state.stage+' ('+stageMap(state.stage).name+') &middot; best wave '+state.best+' &middot; seed '+state.seed+'</div>'+
    '<div class="stats"><div><div class="k">Score</div><div class="v">'+state.score.toLocaleString()+'</div></div>'+
    '<div><div class="k">Kills</div><div class="v">'+state.kills+'</div></div>'+
+   '<div><div class="k">Wave</div><div class="v">'+state.wave+'</div></div>'+
+   '<div><div class="k">Stage</div><div class="v">'+state.stage+'</div></div>'+
+   '<div><div class="k">Accuracy</div><div class="v">'+acc+'%</div></div>'+
    '<div><div class="k">Items</div><div class="v">'+run.itemsTaken+'</div></div></div>'+inventoryHTML()+
    '<button id="go">Redeploy as '+CH().name+'</button>'+
    '<div class="btns"><button id="same" class="ghost">Replay this seed</button><button id="lob" class="ghost">Return to lobby</button></div>'+
