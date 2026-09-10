@@ -12,3 +12,9 @@
 - **three.js r128** (MIT) — core via cdnjs; `GLTFLoader` and `SkeletonUtils` from `examples/js` inlined in `src/05-gltfloader.js`.
 
 Earlier versions: ≤ v2.5 Kenney Mini Characters + Blaster Kit (CC0, `tools/pack-assets.js`); v2.6 the Animated Mech Pack operatives (Mike, Stan, George) and Sci-Fi Kit guns.
+
+## v3.0.0-p7 roster note
+
+Sable, Ember and Arclight (v3.0) reuse the packed Quaternius Ultimate Modular Women (SciFi) / Ultimate Modular Men (Spacesuit, Swat)
+rigs and the Sci-Fi Guns AR_2 / Grenade_2 / Sniper_3 meshes, recoloured at runtime by material name. No new assets were packed, so
+the bundle stays under 9 MB; a later repack with lighter clip sets could give each of them a unique body.

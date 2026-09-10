@@ -1,6 +1,8 @@
 /* ============================ shooting ============================ */
-function dealDamage(e,dmg,point,head,crit,noChain){
+function dealDamage(e,dmg,point,head,crit,noChain,quiet){
   if(e.shieldT>0){ spark(point,0x6fe3ff,4); SFX.hit(); popHit(false,false); return; }
+  if(e.markT>0){ dmg*=1.25; fired('mark'); }                                                       // Ranger's Mark: +25% from every source
+  if(head&&CH().id==='ranger'&&!quiet)e.markT=4;
   if(head&&asc('executioner')){ dmg*=1.5; if(e.type!=='boss'&&e.type!=='dummy'&&e.hp<e.maxHp*0.35&&e.hp>dmg){ dmg=e.hp+1; fired('executioner'); } }   // Executioner
   const overkill=dmg>e.hp; const healBase=evo('coil')?dmg:Math.min(dmg,Math.max(0,e.hp));   // lifesteal never counts overkill — unless Hemolattice
   if(evo('coil')&&overkill&&state.mode==='run')fired('hemolattice');
@@ -8,9 +10,8 @@ function dealDamage(e,dmg,point,head,crit,noChain){
   if(e.type==='boss'&&e.mk>=4&&!e.shieldUsed&&e.hp<e.maxHp*0.5){ e.shieldUsed=true; e.shieldT=3.5; say('<b>Warden</b> raises a shield','item'); }
   if(state.mode==='range'){ rangeStats.dmgLog.push({t:state.t,v:dmg}); rangeStats.hits++; }
   if(run.stats.lifesteal>0&&state.mode==='run'){ player.hp=Math.min(run.stats.maxHp,player.hp+healBase*run.stats.lifesteal); }
-  spark(point,crit?0xffd166:head?0xffe08a:0xff6a4d,head||crit?11:6);
+  if(!quiet){ spark(point,crit?0xffd166:head?0xffe08a:0xff6a4d,head||crit?11:6); if(crit)SFX.crit(); else if(head)SFX.head(); else SFX.hit(); }
   dmgNumber(point,dmg,crit?'crit':head?'head':'hit');
-  if(crit)SFX.crit(); else if(head)SFX.head(); else SFX.hit();
   /* Fracture Optic: a crit ricochets to the nearest other enemy within 8 m for 60% */
   if(crit&&evo('lens')&&!noChain){ let best=null,bd=8; for(const o of enemies){ if(o===e||o.dead||o.type==='dummy')continue; const d=o.group.position.distanceTo(e.group.position); if(d<bd){bd=d;best=o;} }
     if(best){ const pt=best.group.position.clone().setY(1.1); tracer(point,pt,0.03,0xffd166); fired('fracture'); dealDamage(best,dmg*0.6,pt,false,true,true); } }
@@ -34,6 +35,7 @@ function castShot(origin,dir,maxT,near){
 }
 function tryFire(){
   if(!state.running||player.reloading>0||state.mode==='lobby')return;
+  if(CH().weapon==='carbine'&&player.fireHeld&&!(inp._auto&&touch.autoFire))return;   // semi-auto: one shot per press (auto-fire on touch still works)
   if(player.fireCd>0)return;
   const s=run.stats;
   if(player.mag<=0){ SFX.empty(); player.fireCd=.25; startReload(); return; }
@@ -45,7 +47,9 @@ function tryFire(){
   if(player.kineticT>0)fired('kinetic');                                                         // Kinetic Drive: post-sprint window
   const dmgMul=(od?1.2:1)*(rail?2.5:1)*(belt?1.5:1)*(siege?1.35:1)*(player.kineticT>0?1.4:1);
   player.fireCd=s.fireT/(od?1.6:1)/(1+0.3*player.adrenal); state.acc.shots++;
-  if(CH().id==='bulwark')SFX.shotHeavy(); else if(CH().id==='ranger')SFX.shotSnipe(); else SFX.shot();
+  player.fireHeld=true;
+  const wk=CH().weapon||'rifle';
+  if(wk==='scatter')SFX.shotHeavy(); else if(wk==='marksman'||wk==='carbine')SFX.shotSnipe(); else if(wk==='flame'){ if(player.shotIdx%4===0)noise(.12,.12,600,.5); } else SFX.shot();
   player.recoil=Math.min(player.recoil+s.recoil,0.16); player.aimT=2.5; player.kick=Math.min(1,player.kick*0.5+(CH().id==='bulwark'?1:CH().id==='ranger'?0.85:0.6));
   flash.intensity=3.2; flashMat.opacity=.9; if(flashMat.isSpriteMaterial)flashMat.rotation=Math.random()*6.28; else flashMesh.rotation.x=Math.random()*6.28;
   const fx=WEAPON_FX[CH().id]||WEAPON_FX.vanguard;
@@ -62,7 +66,7 @@ function tryFire(){
     dir.x+=(Math.random()-.5)*baseSpread*2; dir.y+=(Math.random()-.5)*baseSpread*2; dir.z+=(Math.random()-.5)*baseSpread*2;
     dir.normalize();
     const tMuzzle=_v1.copy(muzzle).sub(origin).dot(dir);
-    const a=castShot(origin,dir,120,tMuzzle-0.6); _aim.copy(a.point);
+    const a=castShot(origin,dir,wk==='flame'?12:120,tMuzzle-0.6); _aim.copy(a.point);
     /* 2. hit: from the muzzle to that aim point, so cover between the gun and the target blocks the shot */
     dir.copy(_aim).sub(muzzle); const len=dir.length(); if(len<1e-3)continue; dir.multiplyScalar(1/len);
     const h=castShot(muzzle,dir,len+0.05,-2);
@@ -73,8 +77,9 @@ function tryFire(){
       else if(e&&!e.dead){
         pelletHits++;
         const head=h.obj.userData.head, crit=Math.random()<s.crit;
-        const dmg=s.dmg*(head?s.headMult:1)*(crit?2:1)*dmgMul;
-        dealDamage(e,dmg,endPoint,head,crit);
+        let dmg=s.dmg*(head?s.headMult:1)*(crit?2:1)*dmgMul;
+        if(wk==='flame'){ dmg*=1-0.5*Math.min(1,h.t/12); e.burnT=3; if(!e.burnTick)e.burnTick=0.5; fired('burn'); }   // flame: falloff over 12 m, refreshes Burn (6 dps / 3 s)
+        dealDamage(e,dmg,endPoint,head,crit,false,wk==='flame');
         if(rail){ ray.set(muzzle,dir); ray.far=60; const more=ray.intersectObjects(getHitList(),false); ray.far=Infinity; const seen=new Set([e]);   // pierce: every further enemy on the line
           for(const hh of more){ const o=hh.object.userData.enemy; if(!o||o.dead||seen.has(o))continue; seen.add(o); dealDamage(o,dmg,hh.point,hh.object.userData.head,crit); } }
       }else if(tg&&tg.down<=0){
@@ -83,7 +88,7 @@ function tryFire(){
         tg.down=2.2; spark(endPoint,0xffd166,8); SFX.head(); popHit(false,true);
       }else spark(endPoint,0x9fb4cc,3);
     }else if(h.world){ spark(endPoint,0x9fb4cc,3); decal(endPoint,worldHitNormal(endPoint,_v2)); }
-    if(p<4)tracer(muzzle,endPoint,fx.tracer,fx.color);
+    if(p<4)tracer(muzzle,endPoint,fx.tracer*(wk==='flame'?(0.6+Math.random()*0.8):1),fx.color);
   }
   state.acc.shots+=s.pellets-1; state.acc.hits+=pelletHits;   // accuracy counts every pellet (shots++ above counted the trigger pull)
   if(player.mag===0)startReload();
@@ -102,6 +107,7 @@ function killEnemy(e,head){
   if(run.kind==='trial')trialProgress('kill',e,head);
   state.score+=pts; state.kills++; haptic(e.type==='boss'?[60,40,120]:18);
   if(e.type==='boss'){
+    state.wardensRun=(state.wardensRun||0)+1; if(state.wardensRun>(save.get('wardensRun',0)|0))save.set('wardensRun',state.wardensRun);   // Ember unlock: three in one run
     SFX.bossKill(); spark(e.group.position.clone().setY(1.5),0xffd166,40); shakeCam(1,0);
     addScrap(SCRAP_VALUE.boss,e.group.position.clone().setY(2)); addCore(); after(0.9,()=>{ if(!state.offer)openForge(); });
     if(run.kind==='meltdown')addShard(); say('<b>WARDEN DESTROYED</b> +'+pts+' &middot; '+SCRAP_VALUE.boss+' scrap','item'); showBanner('Warden down','Bonus loot',true);

@@ -223,22 +223,23 @@ function buildLobby(){
   /* character pods along the back, each with its own three-point rig and an in-world stat card */
   podDisplays.length=0;
   CHARS.forEach((ch,i)=>{
-    const x=(i-1)*6.5, z=-10;
+    const x=(i-2.5)*4.6, z=-10+(i%2?0.8:-0.8); const locked=!unlocked(ch);
     const ped=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.7,.5,28),new THREE.MeshStandardMaterial({color:0x1c2430,roughness:.55,metalness:.5}));
     ped.position.set(x,.25,z); ped.castShadow=true; ped.receiveShadow=true; world.add(ped);
     boxes.push({min:new THREE.Vector3(x-1.5,0,z-1.5),max:new THREE.Vector3(x+1.5,.5,z+1.5)});
-    const ring=new THREE.Mesh(new THREE.TorusGeometry(1.75,.07,8,40),new THREE.MeshBasicMaterial({color:ch.color}));
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(1.75,.07,8,40),new THREE.MeshBasicMaterial({color:locked?0x3a4250:ch.color}));
     ring.rotation.x=Math.PI/2; ring.position.set(x,.52,z); world.add(ring);
     const disp=buildAvatarModel(ch); disp.position.set(x,.5,z); disp.rotation.y=Math.PI; world.add(disp);   // faces the spawn; the selected pod turns slowly
+    if(locked)disp.traverse(o=>{ if(o.isMesh&&o.material){ if(o.userData.rim){ o.visible=false; return; } o.material.color.multiplyScalar(0.25); if(o.material.emissive)o.material.emissiveIntensity=0; } });   // silhouette until unlocked
     const spin={obj:disp,speed:0,axis:'y'}; spinners.push(spin);
     if(disp.userData.animator)disp.userData.animator.play('idle',0);
     const key=new THREE.PointLight(0xfff1dc,1.3,8,2); key.position.set(x+1.2,3.6,z+2.4); world.add(key);          // warm key, front-high
     const rimL=new THREE.PointLight(ch.color,1.8,7,2); rimL.position.set(x-0.6,3.0,z-1.9); world.add(rimL);        // accent rim, behind
     if(Q.tier!=='low'){ const fill=new THREE.PointLight(0x8fb4ff,0.55,9,2); fill.position.set(x-2.2,1.6,z+1.6); world.add(fill); }   // soft cool fill
     const lab=makeLabel(ch.name.toUpperCase(),ch.css,.8); lab.position.set(x,3.4,z); world.add(lab);
-    const card=makeCard(ch); card.position.set(x+2.9,1.55,z+0.4); card.rotation.y=-0.5; world.add(card);   // every card to the right of its pod, angled toward the spawn
+    const card=makeCard(ch,locked); card.position.set(x+(i%2?-1.9:1.9),2.9,z-1.2); card.rotation.y=i%2?0.35:-0.35; card.scale.setScalar(0.72); world.add(card);   // cards above and beside the pods
     podDisplays.push({ring:ring,idx:i,obj:disp,spin:spin,anim:disp.userData.animator||null,head:disp.userData.bones?(disp.userData.bones.Head||disp.userData.bones.head||null):null});
-    interactables.push({pos:new THREE.Vector3(x,0,z),r:2.6,label:'Select '+ch.name,action:()=>selectChar(i,true)});
+    interactables.push({pos:new THREE.Vector3(x,0,z),r:2.3,label:locked?'Locked \u00b7 '+ch.unlock.label:'Select '+ch.name,action:()=>selectChar(i,true)});
   });
   /* extruded, bevelled title over the corridor mouth */
   const title=buildTitle('FERROUS ARENA'); title.position.set(0,5.4,-15.2); world.add(title);
@@ -279,7 +280,7 @@ function buildTitle(text){
   return g;
 }
 /* in-world stat + ability card: an unlit canvas plane */
-function makeCard(ch){
+function makeCard(ch,locked){
   const cv=document.createElement('canvas'); cv.width=512; cv.height=352; const c=cv.getContext('2d');
   const rr=(x,y,w,h,r)=>{ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); };
   rr(2,2,508,348,26); c.fillStyle='rgba(10,13,20,.86)'; c.fill(); c.lineWidth=3; c.strokeStyle='rgba(120,160,220,.4)'; c.stroke();
@@ -290,6 +291,7 @@ function makeCard(ch){
   cols.forEach((k,i)=>{ const x=30+i*118; c.fillStyle='#8fa2bd'; c.font='600 17px Inter, system-ui, sans-serif'; c.fillText(k[0],x,146); c.fillStyle='#e8eef8'; c.font='700 34px Inter, system-ui, sans-serif'; c.fillText(String(k[1]),x,184); });
   c.fillStyle=ch.css; c.font='700 27px Inter, system-ui, sans-serif'; c.fillText(ch.ability.name+'  \u00b7  Q',30,246);
   c.fillStyle='#c9d4e6'; c.font='400 21px Inter, system-ui, sans-serif';
+  if(locked){ c.fillStyle='rgba(6,8,12,.72)'; rr(2,2,508,348,26); c.fill(); c.fillStyle='#ffc247'; c.font='800 34px Inter, system-ui, sans-serif'; c.fillText('LOCKED',30,300); c.fillStyle='#e8eef8'; c.font='500 22px Inter, system-ui, sans-serif'; c.fillText(ch.unlock.label,30,334); }
   const words=ch.ability.desc.split(' '); let line='', y=282; for(const w of words){ const t=line?line+' '+w:w; if(c.measureText(t).width>452){ c.fillText(line,30,y); y+=28; line=w; } else line=t; } if(line)c.fillText(line,30,y);
   const tex=new THREE.CanvasTexture(cv);
   const m=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.79),new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));

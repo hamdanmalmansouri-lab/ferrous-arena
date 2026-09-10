@@ -3,13 +3,14 @@ const player={
   pos:new THREE.Vector3(0,0,16), vel:new THREE.Vector3(), grounded:true,
   hp:100, shield:0, yaw:0, pitch:-0.06, mag:30, reloading:0, fireCd:0,
   lastHurt:99, recoil:0, kick:0, flinch:0, hitT:0, rollT:0, aimT:0, airT:0, landT:0, orbit:0, free:false, aimK:0, alive:true, abCd:0, abActive:0, iframes:0, crossT:0, dmgT:0, lead:0,
-  adrenal:0, adrenalT:0, kineticT:0, sprintT:0, hemoT:0, siegeT:0, freeAmmoT:0, shotIdx:0, abStock:1, naniteFired:false
+  adrenal:0, adrenalT:0, kineticT:0, sprintT:0, hemoT:0, siegeT:0, freeAmmoT:0, shotIdx:0, abStock:1, naniteFired:false, fireHeld:false
 };
 const run={charIdx:save.get('char',0)|0, items:{}, itemsTaken:0, stats:null, order:null, evos:{}, asc:null, kind:'endless', trial:null};
 function evo(itemId){ return !!run.evos[itemId]; }
 function asc(id){ return run.asc===id; }
 function fired(id){ const t=id in EVO_BY_ID?state.evoFired:state.ascFired; t[id]=(t[id]||0)+1; }   // harness evidence that an evolution / ascension did something
 if(run.charIdx<0||run.charIdx>=CHARS.length)run.charIdx=0;
+(function(){ try{ if(!unlocked(CHARS[run.charIdx]))run.charIdx=0; }catch(e){ run.charIdx=0; } })();
 function CH(){ return CHARS[run.charIdx]; }
 function n(id){ return run.items[id]||0; }
 function computeStats(){
@@ -38,7 +39,10 @@ computeStats();
 const WEAPON_FX={
   vanguard:{flash:'star', size:0.9, tracer:0.035,color:0xbfe0ff},
   ranger:  {flash:'lance',size:1.6, tracer:0.06, color:0x9fffd0},
-  bulwark: {flash:'bloom',size:1.4, tracer:0.022,color:0xffb27a}
+  bulwark: {flash:'bloom',size:1.4, tracer:0.022,color:0xffb27a},
+  sable:   {flash:'star', size:0.7, tracer:0.028,color:0xc9a0ff},
+  ember:   {flash:'bloom',size:1.1, tracer:0.09, color:0xff7a3d},
+  arclight:{flash:'lance',size:1.3, tracer:0.045,color:0x9fe8ff}
 };
 const FLASH_TEX={};
 function flashTex(kind){
@@ -61,7 +65,10 @@ const GUN_MOUNT={bone:'WristR',pos:[0,0,0],rot:[0,0,0],scale:0.5};   // Wrist.R 
 const MOUNTS={   // back = metres along the barrel toward the shooter, up = metres along the gun's +Y (both in gun space, after alignGun)
   vanguard:{pos:[0,0,0],rot:[0,0,0],back:0.04,up:-0.01},
   ranger:  {pos:[0,0,0],rot:[0,0,0],back:0.30,up:-0.02},
-  bulwark: {pos:[0,0,0],rot:[0,0,0],back:0.02,up:0}
+  bulwark: {pos:[0,0,0],rot:[0,0,0],back:0.02,up:0},
+  sable:   {pos:[0,0,0],rot:[0,0,0],back:0.04,up:-0.01},
+  ember:   {pos:[0,0,0],rot:[0,0,0],back:0.02,up:0},
+  arclight:{pos:[0,0,0],rot:[0,0,0],back:0.30,up:-0.02}
 };
 /* Vanguard palette: dark navy instead of near-black, emissive visor and a chest stripe in the accent blue */
 const VANGUARD_NAVY=0x1c2a4a, VANGUARD_ACCENT=0x4ea8ff;
@@ -77,13 +84,23 @@ function applyVanguardPalette(c){
   const q=new THREE.Quaternion(); chest.getWorldQuaternion(q); stripe.quaternion.copy(q.invert());
   chest.add(stripe);
 }
-const CHAR_MODEL={vanguard:'human_swat',ranger:'human_scifi',bulwark:'human_space'};
-const GUN_MODEL={vanguard:'gun_ar',ranger:'gun_sniper',bulwark:'gun_cannon'};
+/* the three v3 operatives reuse the packed human rigs with their own palettes (a repack of three more humans would put the bundle
+   past the 9 MB cap); their guns are the packed Sci-Fi Guns retinted */
+const CHAR_MODEL={vanguard:'human_swat',ranger:'human_scifi',bulwark:'human_space',sable:'human_scifi',ember:'human_space',arclight:'human_swat'};
+const GUN_MODEL={vanguard:'gun_ar',ranger:'gun_sniper',bulwark:'gun_cannon',sable:'gun_ar',ember:'gun_cannon',arclight:'gun_sniper'};
+const PALETTES={
+  sable:   {Blue:0x1a1030,LightBlue:0x8a5cff,Metal:0x1c1a24,Black:0x08060c,Brown:0x14101c},
+  ember:   {SciFi_Light:0x2a2320,SciFi_Light_Accent:0xff5a2a,SciFi_Main:0x3a0e08,SciFi_MainDark:0x120604,Grey:0x1a1210},
+  arclight:{Swat:0x12303a,Swat_Black:0x081418,Visor:0x2ad4ff}
+};
+function applyPalette(c,id){ const p=PALETTES[id]; if(!p)return;
+  c.group.traverse(o=>{ if(!o.isMesh||o.userData.rim)return; const m=o.material; const col=p[m.name]; if(col===undefined)return;
+    m.color.set(col); if(m.name==='Visor'||m.name==='LightBlue'||m.name==='SciFi_Light_Accent'){ m.emissive.set(col); m.emissiveIntensity=m.name==='Visor'?1.2:0.8; } else charBoost(m); }); }
 const AIM_BONES=['Chest','Torso','torso'];   // first present bone gets the aim pitch + flinch
 function buildAvatarModel(ch){
   if(MODELS.ok&&MODELS.items[CHAR_MODEL[ch.id]]){
     const c=spawnCharacter(CHAR_MODEL[ch.id]);
-    if(ch.id==='vanguard')applyVanguardPalette(c);   // the other outfits keep their own palette
+    if(ch.id==='vanguard')applyVanguardPalette(c); else applyPalette(c,ch.id);   // Ranger / Bulwark keep their own palette
     addRim(c.group,ch.color); c.group.rotation.y=MODEL_YAW;
     const g=new THREE.Group(); g.add(c.group);
     const gunObj=new THREE.Group(); gunObj.name='gun';

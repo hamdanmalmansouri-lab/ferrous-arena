@@ -23,7 +23,7 @@ addEventListener('keydown',e=>{
   if(k==='r')startReload();
   if(k==='q')useAbility();
   if(k==='e')doInteract();
-  if(state.mode==='lobby'&&(k==='1'||k==='2'||k==='3'))selectChar(parseInt(k)-1,true);
+  if(state.mode==='lobby'&&/^[1-6]$/.test(k))selectChar(parseInt(k)-1,true);
   if(k==='tab'){ e.preventDefault(); pauseGame(); }
   if(k==='p')pauseGame();
 });

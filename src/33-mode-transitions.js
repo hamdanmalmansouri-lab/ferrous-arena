@@ -5,7 +5,7 @@ function resetPlayerFor(mode,pos){
   player.alive=true; player.abCd=0; player.abActive=0; player.abStock=run.stats.abStock||1; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');
 }
-function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); if(state.md&&state.md.extract){ scene.remove(state.md.extract.g); state.md.extract=null; } }   // also drops a leftover extraction pad
+function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); if(state.snare){ scene.remove(state.snare.g); state.snare=null; } if(state.sentry){ scene.remove(state.sentry.g); state.sentry=null; } state.wardensRun=0; if(state.md&&state.md.extract){ scene.remove(state.md.extract.g); state.md.extract=null; } }   // also drops a leftover extraction pad
 function goLobby(){
   clearTimers(); state.offer=null; state.fab=null; run.kind='endless'; state.md=null; state.trial=null; state.won=false; hud.dataset.kind='';
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;

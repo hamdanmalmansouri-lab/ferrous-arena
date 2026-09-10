@@ -1,5 +1,5 @@
 /* Ferrous Arena service worker — precache the game (and the vendored three.js) so it runs offline once installed. */
-const VERSION='9cc43b0a56';
+const VERSION='57b1054768';
 const CACHE='ferrous-'+VERSION;
 const ASSETS=['./','./index.html','./three.min.js','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())); });

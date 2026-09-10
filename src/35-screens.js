@@ -18,13 +18,14 @@ function controlsHTML(){
 function charCardsHTML(){
   return '<div class="chars">'+CHARS.map((c,i)=>{
     const b=c.base;
-    return '<div class="ch'+(i===run.charIdx?' sel':'')+'" data-i="'+i+'"><div class="sw" style="background:'+c.css+'"></div>'+
+    const lk=!unlocked(c);
+    return '<div class="ch'+(i===run.charIdx?' sel':'')+(lk?' locked':'')+'" data-i="'+i+'"><div class="sw" style="background:'+(lk?'#3a4250':c.css)+'"></div>'+(lk?'<div class="lock">Locked &middot; '+c.unlock.label+'</div>':'')+
       '<h3>'+c.name+'</h3><div class="r">'+c.role+'</div><p>'+c.desc+'</p>'+
       '<div class="st"><span>Health <b>'+b.hp+'</b></span><span>Speed <b>'+b.speed+'</b></span><span>Damage <b>'+b.dmg+(b.pellets>1?'×'+b.pellets:'')+'</b></span><span>Mag <b>'+b.mag+'</b></span></div>'+
-      '<p style="margin-top:10px"><b style="color:'+c.css+'">'+c.ability.name+'</b> — '+c.ability.desc+'</p></div>';
+      '<p style="margin-top:10px"><b style="color:'+c.css+'">'+c.ability.name+'</b> — '+c.ability.desc+(c.passive?'<br><b style="color:var(--dim)">'+c.passive.name+'</b> — '+c.passive.desc:'')+'</p></div>';
   }).join('')+'</div>';
 }
-function bindCharCards(){ card.querySelectorAll('.ch').forEach(el=>{ el.onclick=()=>{ selectChar(parseInt(el.dataset.i),false); card.querySelectorAll('.ch').forEach(x=>x.classList.toggle('sel',x===el)); updatePodRings(); SFX.ui(); }; }); }
+function bindCharCards(){ card.querySelectorAll('.ch').forEach(el=>{ el.onclick=()=>{ if(!unlocked(CHARS[parseInt(el.dataset.i)])){ SFX.empty(); return; } selectChar(parseInt(el.dataset.i),false); card.querySelectorAll('.ch').forEach(x=>x.classList.toggle('sel',x===el)); updatePodRings(); SFX.ui(); }; }); }
 
 function showMenu(){
   state.mode='menu'; state.running=false; hud.classList.remove('on');

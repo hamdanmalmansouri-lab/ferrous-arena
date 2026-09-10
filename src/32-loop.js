@@ -28,7 +28,7 @@ function update(dt){
   player.aimK+=((inp.aim&&mode!=='lobby'?1:0)-player.aimK)*Math.min(1,dt*12);   // RMB aim: camera pulls in, FOV narrows, gun stays up
   if(inp.aim)player.aimT=Math.max(player.aimT,0.3);
   if(TOUCH&&(inp.fire||autoFireCheck()))aimAssist(dt);
-  if(inp.fire||(inp._auto&&touch.autoFire))tryFire();
+  if(inp.fire||(inp._auto&&touch.autoFire))tryFire(); else player.fireHeld=false;
 
   /* ---- movement ---- */
   const fwd=forwardInto(_fwd,player.yaw,0); fwd.y=0; fwd.normalize();
@@ -158,6 +158,8 @@ function update(dt){
 
     let mv=_v2.set(0,0,0);
     if(e.stun>0)e.stun-=dt;   // Riot Charge stun: no movement, no attack this step
+    if(e.markT>0)e.markT-=dt; if(e.slowT>0)e.slowT-=dt;
+    if(e.burnT>0){ e.burnT-=dt; e.burnTick-=dt; if(e.burnTick<=0){ e.burnTick=0.5; dealDamage(e,3,g.position.clone().setY(1.1+Math.random()*.4),false,false,true,true); spark(g.position.clone().setY(1.2),0xff7a3d,2); if(e.dead)continue; } }   // Burn: 6 dps in 0.5 s ticks
     /* pathed approach direction: straight line when close, otherwise A* over the nav grid */
     const dy=Math.abs(player.pos.y-g.position.y);
     const approach=(minD)=>{ if(distP<=minD&&dy<1.2)return false; if(distP<3&&dy<1.2){ mv.copy(toP); return true; }
@@ -200,7 +202,7 @@ function update(dt){
         mv.add(_v3.copy(g.position).sub(o.group.position).setY(0).normalize().multiplyScalar(e.speed*0.9));
       }
     }
-    if(e.stun>0)mv.set(0,0,0);
+    if(e.stun>0)mv.set(0,0,0); if(e.slowT>0)mv.multiplyScalar(0.4);   // Snare: 60 % slow
     g.position.x+=mv.x*dt; g.position.z+=mv.z*dt;
     resolveXZ(g.position,0.5*e.size,g.position.y,1.8);
     g.position.x=Math.max(-ARENA+1,Math.min(ARENA-1,g.position.x));
@@ -266,6 +268,18 @@ function update(dt){
         if(n){ say('<b>Warden</b> summons reinforcements','warn'); spark(g.position.clone().setY(2),0xffd166,14); } } }
     }
   }
+
+  /* ---- Sable's snare + Arclight's sentry ---- */
+  if(state.snare){ const sn=state.snare; if(sn.arm>0){ sn.arm-=dt; sn.ring.material.opacity=0.15; }
+    else { sn.life-=dt; sn.ring.material.opacity=0.45; sn.ring.scale.setScalar(1+Math.sin(state.t*12)*0.03);
+      for(const e of enemies){ if(e.dead)continue; const d=e.group.position.distanceTo(sn.pos); if(d<5){ e.slowT=Math.max(e.slowT,0.6); if(d>0.8)e.group.position.addScaledVector(_v3.copy(sn.pos).sub(e.group.position).setY(0).normalize(),Math.min(d-0.7,6*dt)); fired('snare'); } }
+      if(sn.life<=0){ scene.remove(sn.g); state.snare=null; } } }
+  if(state.sentry){ const st=state.sentry; st.life-=dt; if(st.g.userData.anim)st.g.userData.anim.update(dt); st.g.children[0].position.y=1.4+Math.sin(state.t*2.5)*0.1;
+    let best=null,bd=18; const from=st.pos.clone().setY(st.pos.y+1.4);
+    for(const e of enemies){ if(e.dead||e.type==='dummy')continue; const d=e.group.position.distanceTo(st.pos); if(d<bd&&lineOfSight(from,e.group.position.clone().setY(e.group.position.y+1))){ bd=d; best=e; } }
+    if(best){ st.g.rotation.y=Math.atan2(-(best.group.position.x-st.pos.x),-(best.group.position.z-st.pos.z)); st.acc+=14*dt; st.tick-=dt;
+      if(st.tick<=0){ st.tick=0.25; const pt=best.group.position.clone().setY(1.1); tracer(from,pt,0.03,0x9fe8ff); dealDamage(best,st.acc,pt,false,false,true,true); st.acc=0; fired('sentry'); } }
+    if(st.life<=0){ scene.remove(st.g); state.sentry=null; } }
 
   /* ---- waves ---- */
   if(mode==='run'){
