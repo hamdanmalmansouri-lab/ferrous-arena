@@ -11,7 +11,8 @@ function startWave(nw){
     e.group.position.set(Math.cos(a)*(ARENA-6),0,Math.sin(a)*(ARENA-6));
     if(nav.ready){ const k=navNearestOpen(e.group.position.x,e.group.position.z); if(k>=0)navCentre(k,e.group.position); }
     e.group.scale.setScalar(.2); e.spawnT=1.2; state.boss=e; e.mk=state.stage; e.summonT=6; e.burstLeft=0; e.shieldT=0; e.shieldUsed=false;
-    bossName.textContent='Warden Mk.'+state.stage+(state.stage>1?' — '+['','','summons','triple burst','shield phase'][Math.min(4,state.stage)]:'');
+    const pats=[]; if(e.mk>=2)pats.push('summons'); if(e.mk>=3)pats.push('triple burst'); if(e.mk>=4)pats.push('shield phase');
+    bossName.textContent='Warden Mk.'+e.mk+(pats.length?' — '+pats.join(', '):'');
   }else{ SFX.wave(); showBanner('Wave '+nw,'Incoming'); }
   if(state.wave>state.best){ state.best=state.wave; save.set('best',state.best); }
   syncHUD();
@@ -78,11 +79,11 @@ let stageFadeT=0;
 function nextStage(){
   if(!state.portalOpen||stageFadeT>0)return;
   SFX.portal(); state.portalOpen=false; stageFadeT=1.0; fadeEl.classList.add('on');
-  setTimeout(()=>{
+  after(0.5,()=>{
     const hpKeep=player.hp; const m=buildStage(state.stage+1); state.stage++; player.hp=Math.max(hpKeep,player.hp);
     state.startDelay=3.5; state.stageBanner=true;
     showBanner(m.name,'Stage '+state.stage+' · '+m.sub+(state.mod?' · '+state.mod.name+': '+state.mod.desc:''),true);
     fadeEl.classList.remove('on'); syncHUD();
-  },500);
-  setTimeout(()=>{ stageFadeT=0; },1100);
+  });
+  after(1.1,()=>{ stageFadeT=0; });
 }

@@ -3,7 +3,22 @@
 The single backlog for the game, split by sector and tagged so several Claude Code sessions can work in parallel.
 `ROADMAP.md` is the phase history (what shipped when); `HANDOFF.md` is the code map. **This file is the to-do list.**
 
-Current build: **v2.8.0** (8 Sep 2026) — Quaternius cast, UAL jump + reload, free look + RMB aim, kit props merged into the world, explosive barrels.
+Current build: **v3.0.0-p1** (10 Sep 2026) — v3.0 "Meltdown" pass in progress (see the V3 table below). v2.8.0 (8 Sep 2026): Quaternius cast, UAL jump + reload, free look + RMB aim, kit props merged into the world, explosive barrels.
+
+## V3 — "Meltdown" pass (one-shot prompt, 10 Sep 2026)
+
+Seven phases, each a clean cut with its own gate and commit. Rows here are ticked per phase; sector rows below that a phase absorbs are ticked at the same time.
+
+| Tag | Phase | Status |
+|---|---|---|
+| **V3-P1** `[x]` v3.0.0-p1 | **Correctness.** Muzzle-origin two-stage fire trace; player i-frames 0.35 s + melee token pool (3); lifesteal overkill clamp; omnidirectional sprint (0.8×); CDR floor 0.45; Barrier = 45 % max HP; cached cast list + slab-test world/camera/LOS rays; `timers[]` replaces every gameplay `setTimeout`; build syntax-checks before writing, `<title>` in `<head>`; three.js vendored into `site/` (SW precache, no CDN; standalone inlines it); Warden subtitle from `mk` flags; hurt pop on the model child; per-pellet accuracy; hostiles = on-field + queued; generated HTML untracked. Gate suite `test7.js`. | done |
+| **V3-P2** `[ ]` | **Roguelite loop.** Item offers (pick 1 of 3), rarity tiers, scrap economy + Fabricator, damage-curve fix, variable wave break. | |
+| **V3-P3** `[ ]` | **Art foundation.** Per-map light rig + sky, value ladder, rim pass, Vanguard palette, weapon mounts, camera retune. (absorbs MAP-06) | |
+| **V3-P4** `[ ]` | **Game feel.** Damage numbers, hit-stop, dissolve deaths, muzzle/impact, HUD system, lobby overhaul. (absorbs ART-01, ART-03, MAP-05, ANIM-07) | |
+| **V3-P5** `[ ]` | **Evolutions.** Forge Cores, ten item evolutions, operative ascensions. (absorbs GP-07) | |
+| **V3-P6** `[ ]` | **Meltdown Protocol.** Director mode, reactor charge, Core Shards, extraction win, scoring + score code, Trials. (absorbs GP-10) | |
+| **V3-P7** `[ ]` | **Roster.** Rebalance + passives, Sable / Ember / Arclight, unlock ladder, assets. (absorbs GP-11) | |
+
 
 ---
 

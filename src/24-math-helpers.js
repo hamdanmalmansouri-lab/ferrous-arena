@@ -40,10 +40,24 @@ function supportHeight(pos,radius){
   return h;
 }
 const ray=new THREE.Raycaster();
+/* ray vs AABB slab test. Returns the entry distance, or a negative number when the box is behind the origin or contains it
+   (a gun poking through the wall the player is hugging should not block its own shot); -1 when missed. */
+function rayAABB(o,d,b,tFar){
+  let t0=-Infinity, t1=tFar, a, c, s;
+  if(Math.abs(d.x)<1e-9){ if(o.x<b.min.x||o.x>b.max.x)return -1; } else { a=(b.min.x-o.x)/d.x; c=(b.max.x-o.x)/d.x; if(a>c){s=a;a=c;c=s;} if(a>t0)t0=a; if(c<t1)t1=c; if(t0>t1)return -1; }
+  if(Math.abs(d.y)<1e-9){ if(o.y<b.min.y||o.y>b.max.y)return -1; } else { a=(b.min.y-o.y)/d.y; c=(b.max.y-o.y)/d.y; if(a>c){s=a;a=c;c=s;} if(a>t0)t0=a; if(c<t1)t1=c; if(t0>t1)return -1; }
+  if(Math.abs(d.z)<1e-9){ if(o.z<b.min.z||o.z>b.max.z)return -1; } else { a=(b.min.z-o.z)/d.z; c=(b.max.z-o.z)/d.z; if(a>c){s=a;a=c;c=s;} if(a>t0)t0=a; if(c<t1)t1=c; if(t0>t1)return -1; }
+  return t0;
+}
+/* nearest world hit (boxes[] + the y=0 floor) along a ray, ignoring anything nearer than tNear. Returns the distance or -1. */
+function rayWorld(o,d,tFar,tNear){
+  let best=tFar; tNear=tNear>0?tNear:0;
+  for(let i=0;i<boxes.length;i++){ const t=rayAABB(o,d,boxes[i],best); if(t>=tNear&&t<best)best=t; }
+  if(d.y<-1e-6){ const t=-o.y/d.y; if(t>=tNear&&t<best)best=t; }
+  return best<tFar?best:-1;
+}
+const _los=new THREE.Vector3();
 function lineOfSight(from,to){
-  const dir=_v1.copy(to).sub(from); const dist=dir.length(); dir.normalize();
-  ray.set(from,dir); ray.far=dist;
-  const hits=ray.intersectObjects(colliderMeshes,false);
-  ray.far=Infinity;
-  return hits.length===0;
+  const dir=_los.copy(to).sub(from); const dist=dir.length(); if(dist<1e-4)return true; dir.multiplyScalar(1/dist);
+  return rayWorld(from,dir,dist,0)<0;
 }

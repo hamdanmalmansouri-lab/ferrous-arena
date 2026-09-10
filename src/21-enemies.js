@@ -8,7 +8,7 @@ const MAT_DUMMY =new THREE.MeshStandardMaterial({color:0x5c6b7a,roughness:.7,met
 const MAT_METAL =new THREE.MeshStandardMaterial({color:0x1c222b,roughness:.65,metalness:.6});
 const ENEMY_NAME={chaser:'Rusher',shooter:'Lancer',boss:'Warden',dummy:'Dummy'};
 
-const MAT_HIDDEN=new THREE.MeshBasicMaterial({visible:false});
+const MAT_HIDDEN=new THREE.MeshBasicMaterial({visible:false,side:THREE.DoubleSide});   // double-sided so a shot cast from inside a hit box still registers
 const BASIC_CACHE={};
 function basicMat(color){ return BASIC_CACHE[color]||(BASIC_CACHE[color]=new THREE.MeshBasicMaterial({color:color})); }
 const GEO_LEG=new THREE.BoxGeometry(.2,.6,.22), GEO_ARM=new THREE.BoxGeometry(.17,.62,.17), GEO_EYE=new THREE.BoxGeometry(.26,.07,.05);
@@ -29,13 +29,13 @@ const FLINCH_BONES=['Chest','Torso','Root','Body'];
 const corpses=[];
 function makeEnemy(type,wave){
   const g=new THREE.Group();
-  let animator=null, bones=null;
+  let animator=null, bones=null, model=null, modelScale=1;
   if(MODELS.ok&&MODELS.items[ENEMY_MODEL[type]]){
-    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones;
+    const c=spawnCharacter(ENEMY_MODEL[type],ENEMY_TINT[type]); c.group.rotation.y=MODEL_YAW; g.add(c.group); animator=c.animator; bones=c.bones; model=c.group; modelScale=c.scale;
     if(HOVER_Y[type])c.group.position.y=HOVER_Y[type];
     bones.flinch=null; for(const b of FLINCH_BONES)if(bones[b]){ bones.flinch=bones[b]; break; }
   } else buildEnemyProcedural(g,type);
-  return finishEnemy(g,type,wave,animator,bones);
+  return finishEnemy(g,type,wave,animator,bones,model,modelScale);
 }
 function buildEnemyProcedural(g,type){
   const mat=type==='shooter'?MAT_SHOOT:type==='boss'?MAT_BOSS:type==='dummy'?MAT_DUMMY:MAT_CHASER;
@@ -55,7 +55,7 @@ function buildEnemyProcedural(g,type){
   }
   g.traverse(o=>{if(o.isMesh){o.castShadow=true;}});
 }
-function finishEnemy(g,type,wave,animator,bones){
+function finishEnemy(g,type,wave,animator,bones,model,modelScale){
   const bodyHit=new THREE.Mesh(GEO_BODYHIT,MAT_HIDDEN);
   bodyHit.position.y=1.02; g.add(bodyHit);
   const headHit=new THREE.Mesh(GEO_HEADHIT,MAT_HIDDEN);
@@ -70,12 +70,12 @@ function finishEnemy(g,type,wave,animator,bones){
     cd:type==='shooter'?1.2+Math.random():0.6, cd2:3.5, charge:0, dead:false, hurt:0, strafe:Math.random()<.5?1:-1,
     strafeT:1+Math.random()*2, bob:Math.random()*6, ref:{legs:[],arms:[]}, spawnT:0, wander:new THREE.Vector3(), wanderT:0,
     speedMul:1, path:null, pathI:0, navT:Math.random()*0.4, navGoal:-1,
-    animator:animator, bones:bones, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
+    animator:animator, bones:bones, model:model||null, modelScale:modelScale||1, token:false, attackT:0, shootT:0, animAcc:0, hitBoxes:[bodyHit,headHit]
   };
   g.children.forEach(c=>{ if(c.userData.leg)e.ref.legs.push(c); if(c.userData.arm)e.ref.arms.push(c); });
   bodyHit.userData.enemy=e; bodyHit.userData.head=false;
   headHit.userData.enemy=e; headHit.userData.head=true;
-  enemyHitMeshes.push(bodyHit,headHit);
+  enemyHitMeshes.push(bodyHit,headHit); hitListVer++;
   scene.add(g); enemies.push(e);
   return e;
 }
@@ -84,6 +84,7 @@ function removeEnemy(e,keepCorpse){
   else scene.remove(e.group);
   for(let i=enemyHitMeshes.length-1;i>=0;i--)
     if(enemyHitMeshes[i].userData.enemy===e)enemyHitMeshes.splice(i,1);
+  hitListVer++;
   const i=enemies.indexOf(e); if(i>=0)enemies.splice(i,1);
 }
 function spawnDummy(){

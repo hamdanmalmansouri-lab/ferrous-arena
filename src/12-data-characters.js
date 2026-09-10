@@ -11,5 +11,5 @@ const CHARS=[
   {id:'bulwark',name:'Bulwark',role:'Heavy',color:0xe07b2a,css:'#ff9e3d',
    desc:'Armored heavy with a scatter cannon. Slow, but nothing survives up close.',
    base:{hp:170,speed:5.2,sprint:7.8,dmg:9,fireT:0.62,mag:6,reloadT:1.9,pellets:8,spread:0.055,headMult:2.0,recoil:0.09},
-   ability:{name:'Barrier',short:'SHIELD',cd:15,dur:5,desc:'Energy shield that absorbs 80 damage for 5s'}}
+   ability:{name:'Barrier',short:'SHIELD',cd:15,dur:5,desc:'Energy shield that absorbs 45% of max health for 5s'}}
 ];

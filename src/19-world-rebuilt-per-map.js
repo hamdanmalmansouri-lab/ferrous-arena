@@ -7,6 +7,7 @@ const interactables=[];          // {pos,r,label,action}
 const spinners=[];               // {obj,speed}
 const targets=[];                // practice-range targets
 let targetHitMeshes=[];
+let hitListVer=0;                // bumped whenever enemyHitMeshes / targetHitMeshes change; tryFire rebuilds its cast list lazily
 
 /* attribute read that honours KHR_mesh_quantization storage (normalized ints; r128's getX() does not denormalize) and interleaved buffers (gltf-transform interleaves vertex data) */
 function attrAt(a,i,k){ const A=a.isInterleavedBufferAttribute?a.data.array:a.array; const v=a.isInterleavedBufferAttribute?A[i*a.data.stride+a.offset+k]:A[i*a.itemSize+k]; if(!a.normalized)return v;
@@ -98,12 +99,12 @@ function addBarrel(x,z){
   const hit=new THREE.Mesh(new THREE.BoxGeometry(r*2.2,h,r*2.2),MAT_HIDDEN); hit.position.y=h/2; g.add(hit);
   g.position.set(x,0,z); world.add(g);
   const box={min:new THREE.Vector3(x-r,0,z-r),max:new THREE.Vector3(x+r,h,z+r)}; boxes.push(box);
-  const b={x:x,z:z,g:g,hit:hit,box:box,dead:false,spawnT:0}; hit.userData.barrel=b; targetHitMeshes.push(hit); barrels.push(b); return b;
+  const b={x:x,z:z,g:g,hit:hit,box:box,dead:false,spawnT:0}; hit.userData.barrel=b; targetHitMeshes.push(hit); hitListVer++; barrels.push(b); return b;
 }
 function explodeBarrel(b){
   if(b.dead)return; b.dead=true;
   const p=new THREE.Vector3(b.x,.7,b.z);
-  world.remove(b.g); const bi=boxes.indexOf(b.box); if(bi>=0)boxes.splice(bi,1); const hi=targetHitMeshes.indexOf(b.hit); if(hi>=0)targetHitMeshes.splice(hi,1);
+  world.remove(b.g); const bi=boxes.indexOf(b.box); if(bi>=0)boxes.splice(bi,1); const hi=targetHitMeshes.indexOf(b.hit); if(hi>=0)targetHitMeshes.splice(hi,1); hitListVer++;
   spark(p,0xff8a3d,22); spark(p,0xffd166,10); spark(p,0x444444,8);
   noise(.55,.7,140,.6); blip({type:'sawtooth',f0:160,f1:40,d:.35,v:.25});
   const dp=Math.hypot(player.pos.x-b.x,player.pos.z-b.z); shakeCam(0.9,dp);
@@ -154,7 +155,7 @@ function clearWorld(){
   while(world.children.length){ const o=world.children.pop(); world.remove(o); if(colliderMeshes.indexOf(o)>=0&&o.geometry)o.geometry.dispose(); }
   pendingBlocks={}; pendingProps={}; barrels.length=0;
   boxes.length=0; colliderMeshes.length=0; interactables.length=0; spinners.length=0;
-  targets.length=0; targetHitMeshes=[];
+  targets.length=0; targetHitMeshes=[]; hitListVer++;
   for(let i=enemies.length-1;i>=0;i--)removeEnemy(enemies[i]);
   corpses.forEach(c=>scene.remove(c.g)); corpses.length=0; podDisplays.length=0;
   projectiles.forEach(p=>releaseProjectile(p)); projectiles.length=0;
@@ -245,7 +246,7 @@ function addTarget(x,z,moving){
     const hit=new THREE.Mesh(new THREE.BoxGeometry(sz.x*k,sz.y*k,Math.max(.25,sz.z*k)),MAT_HIDDEN); hit.position.y=sz.y*k/2; plate.add(hit);
     g.add(plate); g.position.set(x,0,z); g.rotation.y=Math.PI; world.add(g);
     const t={g:g,plate:plate,hit:hit,down:0,moving:moving,x0:x,ph:Math.random()*6};
-    hit.userData.target=t; targets.push(t); targetHitMeshes.push(hit); return;
+    hit.userData.target=t; targets.push(t); targetHitMeshes.push(hit); hitListVer++; return;
   }
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,1.2,8),new THREE.MeshStandardMaterial({color:0x2a3442,metalness:.6,roughness:.5}));
   pole.position.y=.6; g.add(pole);
@@ -260,5 +261,5 @@ function addTarget(x,z,moving){
   hit.position.y=.55; plate.add(hit);
   g.add(plate); g.position.set(x,0,z); g.traverse(o=>{if(o.isMesh)o.castShadow=true;}); world.add(g);
   const t={g:g,plate:plate,hit:hit,down:0,moving:moving,x0:x,ph:Math.random()*6};
-  hit.userData.target=t; targets.push(t); targetHitMeshes.push(hit);
+  hit.userData.target=t; targets.push(t); targetHitMeshes.push(hit); hitListVer++;
 }

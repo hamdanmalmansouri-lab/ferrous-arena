@@ -18,7 +18,7 @@ function syncItems(){
 function syncHUD(){
   const s=run.stats;
   uiWave.textContent=state.wave; uiStage.textContent=state.stage;
-  uiLeft.textContent=enemies.length+state.spawnQueue;
+  uiLeft.textContent=enemies.length; uiQueue.textContent=state.spawnQueue;
   uiScore.textContent=state.score.toLocaleString();
   uiKills.textContent=state.kills;
   const nb=state.wave>0?(BOSS_EVERY-(state.wave%BOSS_EVERY))%BOSS_EVERY:BOSS_EVERY;

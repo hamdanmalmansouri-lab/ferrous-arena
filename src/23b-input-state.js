@@ -20,9 +20,9 @@ touch.autoFire=!!AUTO_FIRE; touch.assist=AIM_ASSIST!==false; applySettings();
 
 function readInput(){
   inp.f=(keys.w?1:0)-(keys.s?1:0); inp.r=(keys.d?1:0)-(keys.a?1:0);
-  inp.fire=!!keys.mouse; inp.sprint=!!(keys.shift&&keys.w&&!keys.aim); inp.jump=!!keys.space; inp.aim=!!keys.aim;
+  inp.fire=!!keys.mouse; inp.sprint=!!(keys.shift&&!keys.aim&&(keys.w||keys.a||keys.s||keys.d)); inp.jump=!!keys.space; inp.aim=!!keys.aim;
   if(TOUCH&&touch.active){
-    if(touch.move.len>0.08){ inp.f=touch.move.y; inp.r=touch.move.x; inp.sprint=touch.move.len>0.85&&touch.move.y>0.4; }
+    if(touch.move.len>0.08){ inp.f=touch.move.y; inp.r=touch.move.x; inp.sprint=touch.move.len>0.85; }
     inp.fire=inp.fire||touch.fire; inp.jump=inp.jump||touch.jump;
   }
   if(pad.connected){

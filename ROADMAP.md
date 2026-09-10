@@ -10,6 +10,9 @@ Legend: `[x]` shipped · `[ ]` open · **AC** acceptance criteria
 
 ## 0. Shipped so far
 
+### v3.0 — "Meltdown" (in progress, one phase per commit)
+- [x] **2026-09-10 · v3.0.0-p1 · Phase 1 correctness.** Shots now trace camera→aim point, then muzzle→aim point, so cover behind the player and enemies behind the operative no longer eat forward shots; enemy hit boxes are double-sided so a gun inside a hit box still registers. Player gets 0.35 s i-frames after every hit and at most three Rushers hold a melee token (the rest orbit at 2.5–4 m). Lifesteal ignores overkill, sprint works in every direction (0.8× sideways/back), ability cooldown reduction floors at 0.45×, Barrier scales to 45 % of max HP. World / camera / line-of-sight rays are slab tests over `boxes[]`; the shot cast list is cached and rebuilt only when hit boxes change. `timers[]` (ticked in `update`) replaces every gameplay `setTimeout` (reload SFX chains, stage fade, dummy respawn, damage vignette, crosshair bloom). `build.js` syntax-checks before writing and puts `<title>` in `<head>`; three.js r128 is vendored into `site/` → `docs/` (service-worker precached, no CDN) and inlined in the standalone file. Warden subtitle composed from `mk` flags; hurt pop scales the model child, not the hit boxes; accuracy counts every pellet; HUD hostiles split into on-field + queued; generated HTML and `bind.log` untracked. New gate suite `test7.js` (back-to-cover shot, enemy-behind, three-Rusher survival > 4 s, token cap, omni sprint, lifesteal/CDR/barrier numbers, timers, offline PWA boot).
+
 ### v1.0 — Ferrous Arena (single arena)
 - [x] Three.js r128 third-person shooter in one self-contained HTML file, no build step, no assets
 - [x] 68×68 walled arena with cover blocks and pillars; AABB collision (`resolveXZ`, `supportHeight`), jump-onto-cover

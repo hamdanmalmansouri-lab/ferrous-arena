@@ -5,6 +5,9 @@ function update(dt){
   const s=run.stats, mode=state.mode;
 
   /* ---- timers ---- */
+  tickTimers(dt);
+  if(player.crossT>0){ player.crossT-=dt; if(player.crossT<=0)crossEl.classList.remove('wide'); }
+  if(player.dmgT>0){ player.dmgT-=dt; if(player.dmgT<=0)dmgEl.style.opacity=0; }
   if(player.fireCd>0)player.fireCd-=dt;
   if(player.iframes>0)player.iframes-=dt;
   player.recoil=Math.max(0,player.recoil-dt*0.32);
@@ -30,7 +33,7 @@ function update(dt){
   const right=_right.crossVectors(fwd,UP).normalize();
   const wish=_wish.set(0,0,0).addScaledVector(fwd,inp.f).addScaledVector(right,inp.r);
   const moving=inp.moving;
-  const spd=(inp.sprint&&inp.f>0.5)?s.sprint:s.speed;
+  const spd=inp.sprint?(inp.f>0.5?s.sprint:s.sprint*0.8):s.speed;   // omnidirectional sprint: full speed forward, 80% sideways / back
   const target=wish.multiplyScalar(spd);
   let accel=player.grounded?14:5;
   if(player.grounded&&mapData.ice.length){ for(const ic of mapData.ice){ if(Math.hypot(player.pos.x-ic.x,player.pos.z-ic.z)<ic.r){ accel=2.2; break; } } }
@@ -63,7 +66,7 @@ function update(dt){
     avatarAnim.update(dt);
     const reloadAct=player.reloading>0?avatarAnim.actions.reload:null;                       // UAL Pistol_Reload retargeted onto the rig (absent until repacked)
     const firing=!reloadAct&&(inp.fire||player.fireCd>0.02||(inp._auto&&touch.autoFire));
-    const sprinting=inp.sprint&&inp.f>0.5;
+    const sprinting=inp.sprint&&moving;
     /* locomotion clip from the body-relative move vector: strafes and back-pedal have their own clips */
     const lat=Math.abs(inp.r)>Math.abs(inp.f)*1.2;
     const loco=!moving?'idle':lat?(inp.r>0?'runR':'runL'):inp.f<0?'runB':sprinting?'run':'walk';
@@ -103,9 +106,8 @@ function update(dt){
   let dist=5.15-1.95*player.aimK;
   const fov=66-16*player.aimK; if(Math.abs(camera.fov-fov)>0.01){ camera.fov=fov; camera.updateProjectionMatrix(); }
   crossEl.classList.toggle('free',player.orbit!==0);
-  ray.set(pivot,_v1.copy(camF).negate()); ray.far=dist+0.4;
-  const cHits=ray.intersectObjects(colliderMeshes,false); ray.far=Infinity;
-  if(cHits.length)dist=Math.max(1.1,cHits[0].distance-0.35);
+  const camHit=rayWorld(pivot,_v1.copy(camF).negate(),dist+0.4,0);   // slab test against boxes[] (no mesh raycast per step)
+  if(camHit>=0)dist=Math.max(1.1,camHit-0.35);
   camera.position.copy(pivot).addScaledVector(camF,-dist);
   camera.position.y=Math.max(0.5,camera.position.y);
   camera.lookAt(_look.copy(pivot).addScaledVector(camF,12));
@@ -130,6 +132,7 @@ function update(dt){
   }
 
   /* ---- enemies ---- */
+  let meleeHeld=0; for(let i=0;i<enemies.length;i++)if(enemies[i].token)meleeHeld++;
   for(let i=enemies.length-1;i>=0;i--){
     const e=enemies[i], g=e.group;
     if(e.spawnT>0){ e.spawnT-=dt; const k=1-Math.max(0,e.spawnT)/(e.type==='boss'?1.2:0.45); g.scale.setScalar((0.2+0.8*k)*e.size); }
@@ -143,7 +146,16 @@ function update(dt){
     const approach=(minD)=>{ if(distP<=minD&&dy<1.2)return false; if(distP<3&&dy<1.2){ mv.copy(toP); return true; }
       if(navSteer(e,player.pos,_v3,dt)){ mv.copy(_v3); return true; } mv.copy(toP); return true; };
     if(e.type==='chaser'){
-      if(approach(1.35))mv.multiplyScalar(e.speed*e.speedMul);
+      /* melee tokens: at most MELEE_TOKENS chasers press the attack at once; the rest orbit at 2.5–4 m until one frees */
+      if(e.token){ if(distP>7){ e.token=false; meleeHeld--; } }
+      else if(distP<5&&dy<1.2&&meleeHeld<MELEE_TOKENS){ e.token=true; meleeHeld++; }
+      if(e.token||distP>5||dy>=1.2){ if(approach(1.35))mv.multiplyScalar(e.speed*e.speedMul); }
+      else{
+        e.strafeT-=dt; if(e.strafeT<=0){ e.strafe*=-1; e.strafeT=1.5+Math.random()*2; }
+        const sp=e.speed*e.speedMul; mv.set(-toP.z,0,toP.x).multiplyScalar(e.strafe*sp*0.7);
+        if(distP<2.5)mv.addScaledVector(toP,-sp*0.8); else if(distP>4)mv.addScaledVector(toP,sp*0.6);
+        if(!navOpenAt(g.position.x+mv.x*0.4,g.position.z+mv.z*0.4))mv.set(0,0,0);
+      }
     }else if(e.type==='shooter'){
       e.strafeT-=dt;
       if(e.strafeT<=0){ e.strafe*=-1; e.strafeT=1.2+Math.random()*1.8; }
@@ -199,14 +211,16 @@ function update(dt){
       e.ref.arms.forEach(a=>{ a.rotation.x=e.type==='shooter'?-1.2:Math.sin(e.bob+(a.userData.arm>0?Math.PI:0))*0.4-0.15; });
     }
 
-    if(e.hurt>0){ e.hurt-=dt; g.scale.setScalar((e.spawnT>0?g.scale.x:e.size)*(1+e.hurt*(e.animator?0.2:0.5))); }
-    else if(e.spawnT<=0)g.scale.setScalar(e.size);
+    /* hurt pop on the model child only — the hit boxes on the group keep their size */
+    if(e.hurt>0){ e.hurt-=dt; if(e.model)e.model.scale.setScalar(e.modelScale*(1+e.hurt*0.2)); }
+    else if(e.model&&e.model.scale.x!==e.modelScale)e.model.scale.setScalar(e.modelScale);
+    if(e.spawnT<=0&&!(e.shieldT>0))g.scale.setScalar(e.size);
 
     /* attacks (only in a real run) */
     if(mode!=='run')continue;
     e.cd-=dt;
     if(e.type==='chaser'){
-      if(distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+state.wave*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
+      if(e.token&&distP<1.9&&dy<1.6&&e.cd<=0){ e.cd=0.92; e.attackT=0.55; hurtPlayer(9+state.wave*0.5); g.position.add(toP.clone().multiplyScalar(-0.25)); }
     }else if(e.type==='shooter'){
       const muzzle=g.position.clone(); muzzle.y+=1.35;
       if(distP<26&&e.cd<=0&&lineOfSight(muzzle,player.pos.clone().add(new THREE.Vector3(0,1.2,0)))){

@@ -1,6 +1,6 @@
 # Ferrous Arena — Project Handoff
 
-**Status:** playable v2.7 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
+**Status:** v3.0.0-p1 — the v3.0 "Meltdown" pass is in progress (phase 1 correctness shipped; phases 2–7 in `MASTER-ROADMAP.md` V3 table). Base: playable v2.8 (roadmap phases 1, 2a/2b, 4, 3, 5 — performance, touch/gamepad, PWA, pathfinding + stages,
 Quaternius modular-human operatives + Sci-Fi Guns, mech/kit enemies, layered skeletal animation with strafes, roll, hit reactions + procedural recoil/flinch/shake, settings screen), verified error-free in headless Chromium (six suites). Desktop measured at a steady 120 fps on an RTX 5090 at High tier.
 **Deliverables:** `ferrous-arena.html` (standalone, open and play) and `docs/` (GitHub Pages PWA for phones).
 **Live copy:** published as a private Claude artifact (same URL since v1).
@@ -10,7 +10,7 @@ Quaternius modular-human operatives + Sci-Fi Guns, mech/kit enemies, layered ske
 ## 1. What this is
 
 A third-person **roguelite wave shooter** in the spirit of Risk of Rain, running entirely in a browser tab.
-Three.js r128 (global `THREE`, non-module build) from cdnjs; everything else is inline in one IIFE.
+Three.js r128 (global `THREE`, non-module build) **vendored**: `site/three.min.js` → `docs/` same-origin (service-worker precached) and inlined into the standalone `ferrous-arena.html`; only the artifact body still references cdnjs (it cannot load same-origin files). Everything else is inline in one IIFE.
 Operatives (Ultimate Modular Men/Women), weapons (Sci-Fi Guns), enemies (Animated Mech Pack, Sci-Fi Essentials Kit), crates and pickups are Quaternius CC0 glTF models packed into the file (`ATTRIBUTION.md`); everything else is procedural
 geometry, WebAudio-synthesised sound and canvas-generated labels. If the packed models fail to parse the game falls back to the v2 box models.
 
@@ -20,7 +20,7 @@ modifier and a stronger Warden pattern → … → death → stats (seed shown, 
 
 **Controls (desktop):** WASD move, mouse look (pointer lock), LMB hold to fire, **RMB aim** (camera in, FOV 66→50, spread ×0.6), **Q ability**, R reload,
 **free look** (mouse orbits the camera round the operative while idle; moving / firing / aiming turns the operative to the camera), **E interact**,
-Shift sprint, Space jump, **1/2/3 swap operative in the lobby**, Esc / Tab menu, ` performance overlay.
+Shift sprint (any direction; 0.8× speed unless moving forward), Space jump, **1/2/3 swap operative in the lobby**, Esc / Tab menu, ` performance overlay.
 **Touch:** left half drag = floating joystick (push far = sprint), right half drag = look, FIRE / ability / JUMP / R buttons,
 interact pill, pause button. Aim assist on by default, optional auto-fire (menu toggles).
 **Gamepad:** left stick move, right stick look, RT fire, LB/LT ability, X reload, A jump, Y/B interact, Start pause.
@@ -34,7 +34,7 @@ interact pill, pause button. Aim assist on by default, optional auto-fire (menu 
 |---|---|---|---|---|---|
 | Vanguard | Assault | 110 | 6.2 | Rifle, 17 dmg, 30 mag, 2.6× head | **Overdrive** — +60% fire rate, +20% dmg for 4s (12s cd) |
 | Ranger | Marksman | 85 | 7.0 | Marksman rifle, 46 dmg, 10 mag, 3× head | **Blink** — teleport 8m in movement dir, 0.5s i-frames (6s cd) |
-| Bulwark | Heavy | 170 | 5.2 | Scatter cannon, 8×9 dmg, 6 shells, 2× head | **Barrier** — 80-pt shield for 5s (15s cd) |
+| Bulwark | Heavy | 170 | 5.2 | Scatter cannon, 8×9 dmg, 6 shells, 2× head | **Barrier** — shield worth 45 % of max HP for 5s (15s cd) |
 
 Base numbers live in `CHARS[i].base`; every derived stat is computed in `computeStats()`.
 
@@ -56,7 +56,7 @@ Base numbers live in `CHARS[i].base`; every derived stat is computed in `compute
 kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+28% max HP).
 
 ### Enemies
-- **Rusher** (chaser, red) — melee. **Lancer** (shooter, purple) — holds 7–12 m, strafes, fires on LOS.
+- **Rusher** (chaser, red) — melee. At most `MELEE_TOKENS` (3) Rushers hold an attack token at once; the others orbit at 2.5–4 m until one frees (token released beyond 7 m or on death). **Lancer** (shooter, purple) — holds 7–12 m, strafes, fires on LOS (slab test, `lineOfSight`). Every hit on the player grants 0.35 s of i-frames (`hurtPlayer`).
 - **Warden** (boss, gold, 2.3× scale) — `hp = (700 + wave*140) * (1 + wave*0.035)`; melee inside 3.2 m,
   12-projectile radial burst every 2.6 s, 40% chance instead to charge (3.4× speed for 1.3 s). Boss bar under the top HUD.
 - **Dummy** (grey) — practice-range only, wanders, never attacks, respawns 2 s after death.
@@ -153,13 +153,13 @@ kill (gold octahedron), 3 drops from a Warden. 16% of kills drop a repair kit (+
 | File | Role |
 |---|---|
 | `src/*.js`, `src/styles.css`, `src/markup.html` | **The source.** One file per section, numbered in load order (`23b-`, `34b-` slot between sections). Edit these. |
-| `build.js` | `node build.js` → the HTML files below **and `docs/`**, then syntax-checks the bundle. |
+| `build.js` | `node build.js` → syntax-checks the bundle **first**, refreshes `site/three.min.js` from `node_modules`, then writes the HTML files below **and `docs/`**. |
 | `arena.body.html` | Generated. The **artifact-publish source** (no doctype/head/body — the Artifact tool adds them). |
-| `ferrous-arena.html` | Generated. **Standalone deliverable** — open it in a browser. No service worker. |
+| `ferrous-arena.html` | Generated (git-ignored). **Standalone deliverable** — open it in a browser; three.js inlined, no network, no service worker. |
 | `docs/` | Generated. **GitHub Pages site / PWA**: `index.html` (standalone + manifest link + SW registration + iOS metas), `manifest.webmanifest`, `sw.js` (cache version = bundle hash), icons, `.nojekyll`. |
-| `site/` | Hand-maintained PWA assets copied into `docs/` by the build (manifest, `sw.js` template, PNG icons). |
-| `test-local.html` | Generated. cdnjs script rewritten to `./node_modules/three/build/three.min.js` for headless tests. |
-| `test.js` … `test6.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages · models/settings/death anim · animation layers/recoil/flinch/shake/LOD/pod emote). All wait for `MODELS.ready`. |
+| `site/` | PWA assets copied into `docs/` by the build (manifest, `sw.js` template with `./three.min.js` in its precache list, PNG icons, vendored `three.min.js`). |
+| `test-local.html` | Generated (git-ignored). Identical to the standalone; the headless harnesses load it from `file://`. |
+| `test.js` … `test7.js` | Playwright harnesses (desktop flow · aimed fire/crate/barrier · touch emulation · nav + stages · models/settings/death anim · animation layers/recoil/flinch/shake/LOD/pod emote · **v3 gates: back-to-cover shot, enemy-behind, three-Rusher survival, melee tokens, omni sprint, lifesteal/CDR/barrier, timers, offline PWA**). All wait for `MODELS.ready`. |
 | `tools/pack-quaternius.js`, `tools/retarget.js`, `ATTRIBUTION.md` | asset packer (needs `Assets/` with the Quaternius packs; `npm i @gltf-transform/core @gltf-transform/extensions @gltf-transform/functions sharp gl-matrix`) and licences. `tools/pack-assets.js` is the retired Kenney packer. |
 | `README.md` | Player-facing readme + GitHub Pages / install steps. |
 | `ROADMAP.md` | Phase history; tick items there as they ship. |
@@ -177,7 +177,7 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 |---|---|
 | `00-prelude` | THREE presence check |
 | `05-gltfloader`, `06-assets`, `07-models` | inlined GLTFLoader + SkeletonUtils; packed `ASSET_DATA`; `loadModels`, `spawnCharacter`, `spawnProp`, `splitClip`, `makeAnimator` (`play` / `layer` / `finished`) |
-| `11-constants`, `12-data-characters`, `13-data-items` | tuning constants, `CHARS[]` (abilities carry a `short` touch label), `ITEMS[]` |
+| `11-constants`, `12-data-characters`, `13-data-items` | tuning constants, `MELEE_TOKENS`, **`timers[]` + `after(t,fn)` + `tickTimers(dt)`** (every gameplay delay goes through these, never `setTimeout`), `CHARS[]` (abilities carry a `short` touch label), `ITEMS[]` |
 | `14-dom`, `15-persistence` | cached element handles (HUD + touch layer); `save.get/set` (localStorage `fa2.*`, try/catch) |
 | `16-audio` | `blip`, `noise`, `SFX`, single `master` GainNode |
 | `17-quality-tiers` | `TIERS` (high/medium/low: pixel ratio, shadows, fx density, fog, stars, AA), `detectTier()`, `IS_COARSE`, `Q` |
@@ -190,11 +190,11 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 | `22-effects` | **pools**: `TRACER_POOL` (48, geometry rewritten in place), `SPARK_POOL` (240, fade by scale, count × `Q.cfg.fx`), `PROJ_POOL` (160, no lights — `glowSprite()`), `dropPickup` |
 | `23-state` | `state` (`mode` ∈ menu/lobby/range/run), `rangeStats`, `keys` |
 | `23b-input-state` | `TOUCH` detection, **`SETTINGS`** (touch/mouse/pad sensitivity multipliers, volume, invert Y, screen shake; `applySettings()`), `inp`, `readInput()`, `pollGamepad()`, `aimAssist()`, `autoFireCheck()`, `doInteract()`, `pauseGame()`, `haptic()` |
-| `24-math-helpers` | scratch vectors (`_v1.._v3`, `_fwd`, `_camF`…), `forwardInto(out,…)`, `resolveXZ`, `supportHeight`, `lineOfSight` |
+| `24-math-helpers` | scratch vectors (`_v1.._v3`, `_fwd`, `_camF`…), `forwardInto(out,…)`, `resolveXZ`, `supportHeight`, **`rayAABB` / `rayWorld(o,d,tFar,tNear)`** (slab tests over `boxes[]` + the floor — used by shots, the camera and `lineOfSight`; a box containing the origin never blocks) |
 | `25-hud-helpers` | `syncHUD` (ability, boss bar, touch button, stage), `syncCompass` (crates/items/boss/portal bearings), `syncItems`, `syncRange`, `setMode` |
 | `26-items`, `27-characters` | `giveItem(id)`, `selectChar(i, inLobby)` |
 | `28-waves` | `startWave` (boss on multiples of `BOSS_EVERY`, `e.mk = stage`), `spawnOne` (nav-snapped, Lancer share + swift mod), `waveCleared` (crate, bounty), **`bossDefeated`, `buildStage`, `nextStage`** |
-| `29-shooting` | `tryFire` (pellet loop, crit, range targets), `dealDamage`, `killEnemy`, `startReload` |
+| `29-shooting` | `getHitList()` (enemy hit boxes + plates/barrels, rebuilt on `hitListVer`), `castShot(origin,dir,maxT,near)`, `tryFire` (per pellet: camera→aim point, then muzzle→aim point; crit, range targets; accuracy per pellet), `dealDamage` (lifesteal on `min(dmg, hp)`), `killEnemy`, `startReload` |
 | `30-abilities`, `31-damage` | `useAbility` (Blink uses `inp`), `shakeCam(amp,dist)`, `hurtPlayer` (shield, i-frames, haptic, flinch + shake) |
 | `32-loop` | `update(dt)` at a **fixed 60 Hz step**; order: input → timers (kick/flinch decay) → movement (ice, low-grav) → regen → avatar (layers + procedural) → pods → camera (+ shake) → spinners/targets → interactables (run: portal) → enemies (`approach()` = straight inside 3 m else `navSteer`; ground-following; animation LOD + layers + flinch; boss patterns by `mk`) → waves (paused while the portal is open) → reactor pulse → projectiles → pickups → fx; `perf`, auto-tier probe, debug overlay (2nd line = animation) |
 | `33-mode-transitions` | `resetPlayerFor`, `goLobby/goRange`, `goRun(seed?)` (seed from arg / `?seed=` / clock → `run.order`, `buildStage(1)`), `resumePlay()`, `enterPlay()` |
@@ -204,8 +204,10 @@ Never hand-edit the generated HTML. `node build.js` after any change in `src/` o
 
 ### Three things worth understanding before editing
 
-**Aiming.** The camera sits behind and 0.72 m right of the player; the crosshair line is the camera's centre ray, so
-`tryFire()` uses `ray.setFromCamera({x:0,y:0})`. **When scripting an aim test, put the target on `player.x + 0.72`.**
+**Aiming.** The camera sits behind and 0.72 m right of the player; the crosshair line is the camera's centre ray. `tryFire()`
+casts it twice: camera → aim point (first hit box whose centre projects past the muzzle plane, else the map via `rayWorld`, else 120 m),
+then muzzle → aim point for the real hit, so cover behind the player and enemies behind the operative can't intercept, while cover
+between the gun and the target still does. Hit boxes are double-sided (`MAT_HIDDEN`). **When scripting an aim test, put the target on `player.x + 0.72`** and keep the lane clear of map cover.
 
 **Input flow.** Keyboard writes `keys`, touch writes `touch`, the gamepad is polled into `pad`; `readInput()` merges them into
 `inp` at the top of every step and the loop/abilities/shooting read only `inp`. Look is a delta, so each source applies it to
@@ -222,7 +224,7 @@ map (portal/pod lights in the lobby, muzzle flash on the avatar); everything tra
 - Operative feel: `CHARS[i].base` and `.ability`. Item strength: the multipliers inside `computeStats()`.
 - Drop rates: `killEnemy` (`r<0.06` item, `r<0.22` heal). Crate distance: `waveCleared`.
 - Difficulty: `makeEnemy` hp/speed lines, `startWave` counts, `spawnOne` shooter share, boss timers in the boss branch of `update`.
-- Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`, 3.5 after a portal. Alive cap 16 in the spawn block (summons up to 20).
+- Melee pressure: `MELEE_TOKENS` (3), i-frames 0.35 s in `hurtPlayer`, orbit band 2.5–4 m in the chaser branch. Wave break `state.waveBreak=4.5`; first-wave delay `state.startDelay=3` in `goRun`, 3.5 after a portal. Alive cap 16 in the spawn block (summons up to 20).
 - Nav: `NAV_STEP`, `NAV_RADIUS`, repath interval in `navSteer`, `maxExpand` 2500. Stage: `MODS[]` effects in `spawnOne`/`killEnemy`/`dropPickup`/movement; boss patterns in the boss branch; reactor `period` in `buildReactor`.
 - Touch: `TOUCH_SENS_BASE` 0.0085 × `SETTINGS.touchSens`; `MOUSE_SENS_BASE` 0.0022; `PAD_SENS_BASE` 2.8; `STICK_R`; aim-assist cone/pull in `aimAssist`.
 - Models: per-model `height` in the packer `PICK`, `GUN_MOUNT` (scale 0.5) / `MOUNTS`, `GUN_AXIS` fallback, `player.aimT` 2.5 s / `hitT` 0.45 s / `rollT` 0.5 s / `landT` 0.55 s, jump-start window 0.32 s, `ENEMY_TINT`, `HOVER_Y`, emissive intensity 1.6 / colour cast 0.55 in `spawnCharacter`, clip `timeScale` formulas in the loop.
@@ -246,14 +248,14 @@ node test3.js   # touch: layer on, lobby without pointer lock, joystick moves, l
 node test4.js   # stages: nav grid per map, 3 Rushers close on the player on every map (incl. Relay platform top), portal -> next stage, Mk2 summons, reactor pulse
 node test5.js   # models parsed (13 items, 10 clips), settings sliders persist, enemies animate, kill -> corpse, draw calls
 node test6.js   # layers: runshoot while moving+firing, airborne = -|aim, runL / runB strafes, Blink = roll, hit = idle|hit, kick decays, Rusher melee one-shot, flinch, shake decays, LOD count, pod emote -> idle, heads found
+node test7.js   # v3 gates: back-to-cover shot hits, enemy behind can't eat a shot, 3 Rushers leave a Vanguard alive after 4 s, ≤3 tokens, omni sprint 0.8x, lifesteal clamp, CDR 0.45, Barrier 45%, timers, docs/ boots with the network off
 ```
 
 Launch flags: `--use-gl=swiftshader --enable-unsafe-swiftshader --no-sandbox`. Simulation is fixed-step, so results are
 deterministic per step; headless frames are slow (~0.5 s) so each frame advances up to 8 steps (0.13 s sim).
-PWA check: `cd docs && python3 -m http.server 8765`, load `http://localhost:8765/`, confirm `navigator.serviceWorker.getRegistration()`
-is active and `caches.keys()` lists `ferrous-<hash>` (three.js itself won't load in the sandbox; it will on a real host).
+PWA check: `node test7.js` serves `docs/` over http, waits for the service worker to precache `index.html` + `three.min.js`, then reloads offline and expects the menu (manual: `cd docs && python3 -m http.server 8765`).
 
-`window.__ARENA__` exposes `{state, player, run, enemies, keys, camera, CHARS, ITEMS, computeStats, selectChar, giveItem,
+`window.__ARENA__` exposes `{timers, after, rayWorld, castShot, hurtPlayer, killEnemy, dealDamage, state, player, run, enemies, keys, camera, CHARS, ITEMS, computeStats, selectChar, giveItem,
 useAbility, goLobby, goRange, goRun, startWave, pickups, targets, interactables, perf, Q, setQuality, renderer, toggleDebug,
 inp, touch, pad, TOUCH, nav, MAPS, buildStage, nextStage, mapData, stageMap, navPath, navNearestOpen, bossDefeated, MODELS, SETTINGS,
 showSettings, spawnCharacter, GUN_MOUNT, avatar, podDisplays, avatarAnim(), corpses, forceStart(mode)}`.
@@ -290,8 +292,10 @@ Roughly in value order (details in `ROADMAP.md`):
 
 ## 8. Constraints to respect
 
-- Single file, no build step for the deliverable. Three r128 non-module. CDN allowlist for the artifact: scripts only from
-  cdnjs / jsdelivr-npm / tailwind / jquery; no external images or fetches (so `docs/` extras never go into `arena.body.html`).
+- Single file, no build step for the deliverable. Three r128 non-module, vendored (`site/three.min.js`); the standalone inlines it, `docs/` loads it same-origin. CDN allowlist for the artifact: scripts only from
+  cdnjs / jsdelivr-npm / tailwind / jquery; no external images or fetches (so `docs/` extras never go into `arena.body.html`, which is the one file still pointing at cdnjs).
+- No `setTimeout` for anything gameplay-timed — use `after(seconds, fn)`; `goRun/goLobby/goRange` clear the queue.
+- Never raycast `colliderMeshes` per step; use `rayWorld` (slab test) for world hits and the cached `getHitList()` for hit boxes.
 - Dark-only look is deliberate; `body` paints its background explicitly.
 - Keep `arena.body.html` free of doctype/html/head/body tags — the Artifact tool supplies the skeleton.
 - No dynamic lights on transient objects (§4). Add lights only in map builders.

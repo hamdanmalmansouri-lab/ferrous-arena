@@ -1,7 +1,7 @@
 /* ============================ dom ============================ */
 const $=id=>document.getElementById(id);
 const canvas=$('c'), hud=$('hud'), screenEl=$('screen'), card=$('card');
-const uiWave=$('uiWave'),uiLeft=$('uiLeft'),uiScore=$('uiScore'),uiKills=$('uiKills'),uiBossIn=$('uiBossIn');
+const uiWave=$('uiWave'),uiLeft=$('uiLeft'),uiQueue=$('uiQueue'),uiScore=$('uiScore'),uiKills=$('uiKills'),uiBossIn=$('uiBossIn');
 const uiHp=$('uiHp'),uiMaxHp=$('uiMaxHp'),hpfill=$('hpfill'),shfill=$('shfill'),uiMag=$('uiMag'),uiAmmoLbl=$('uiAmmoLbl'),uiChar=$('uiChar');
 const reloadbar=$('reloadbar'),reloadfill=$('reloadfill'),crossEl=$('cross'),hitmark=$('hitmark');
 const dmgEl=$('dmg'),lowvig=$('lowvig'),feed=$('feed'),banner=$('banner'),bnT=$('bnT'),bnS=$('bnS');

@@ -4,7 +4,7 @@ function useAbility(){
   const ab=CH().ability, s=run.stats;
   player.abCd=ab.cd*s.cdMult;
   if(CH().id==='vanguard'){ player.abActive=ab.dur; SFX.ability(); say('<b>Overdrive</b> engaged'); }
-  else if(CH().id==='bulwark'){ player.abActive=ab.dur; player.shield=80; shieldMesh.visible=true; SFX.ability(); say('<b>Barrier</b> up'); }
+  else if(CH().id==='bulwark'){ player.abActive=ab.dur; player.shield=run.stats.maxHp*0.45; shieldMesh.visible=true; SFX.ability(); say('<b>Barrier</b> up'); }
   else if(CH().id==='ranger'){
     const fwd=forwardVec(player.yaw,0); fwd.y=0; fwd.normalize();
     const right=new THREE.Vector3().crossVectors(fwd,new THREE.Vector3(0,1,0)).normalize();

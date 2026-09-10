@@ -69,6 +69,7 @@
   #topbar .k{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
   #topbar .v{font:600 19px/1.2 "Inter",system-ui,sans-serif;font-variant-numeric:tabular-nums;margin-top:3px}
   #topbar .v.acc{color:var(--accent)}
+  #topbar .v small{font-size:11px;color:var(--dim);margin-left:4px;font-weight:500}
 
   #bossbar{left:50%;top:92px;transform:translateX(-50%);width:min(520px,70vw);padding:8px 14px 10px;display:none}
   #bossbar.on{display:block}

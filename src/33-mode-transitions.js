@@ -5,7 +5,9 @@ function resetPlayerFor(mode,pos){
   player.alive=true; player.abCd=0; player.abActive=0; player.shield=0; player.iframes=0; shieldMesh.visible=false; avatar.visible=true;
   reloadbar.classList.remove('on');
 }
+function clearTimers(){ timers.length=0; stageFadeT=0; fadeEl.classList.remove('on'); }
 function goLobby(){
+  clearTimers();
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildLobby(); setMode('lobby');
   resetPlayerFor('lobby',new THREE.Vector3(0,0,6));
@@ -14,6 +16,7 @@ function goLobby(){
   SFX.portal(); syncHUD();
 }
 function goRange(){
+  clearTimers();
   if(state.portal){ scene.remove(state.portal); state.portal=null; } state.portalOpen=false;
   clearWorld(); buildRange(); setMode('range');
   run.items={}; computeStats(); syncItems();
@@ -22,6 +25,7 @@ function goRange(){
   state.boss=null; SFX.portal(); showBanner('Practice range','Fire at will'); syncHUD();
 }
 function goRun(seed){
+  clearTimers();
   const qs=/[?&]seed=(\d+)/.exec(location.search);
   state.seed=seed||(qs?parseInt(qs[1]):(Date.now()%1e9));
   run.order=makeRunOrder(state.seed);
